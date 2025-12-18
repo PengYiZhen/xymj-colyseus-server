@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>帧同步演示 - 小游码匠</title>
+    <!-- Colyseus 客户端库 -->
+    <script src="https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            padding: 30px 20px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .back-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-item label {
+            display: block;
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .status-item value {
+            display: block;
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button.danger {
+            background: #dc3545;
+        }
+
+        .button.danger:hover {
+            background: #c82333;
+        }
+
+        .button.success {
+            background: #28a745;
+        }
+
+        .button.success:hover {
+            background: #218838;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .log-container {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid transparent;
+            padding-left: 10px;
+        }
+
+        .log-entry.info {
+            border-left-color: #17a2b8;
+        }
+
+        .log-entry.success {
+            border-left-color: #28a745;
+        }
+
+        .log-entry.error {
+            border-left-color: #dc3545;
+        }
+
+        .log-entry.warning {
+            border-left-color: #ffc107;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .status-log-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+            width: 100%;
+        }
+
+        /* 确保在小屏幕上才换行 */
+        @media (max-width: 1200px) {
+            .status-log-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 让右侧列占据更多空间，横向排列 */
+        .grid-container > div:last-child {
+            grid-column: span 1;
+            width: 100%;
+        }
+
+        @media (min-width: 1401px) {
+            .grid-container {
+                grid-template-columns: 1fr 1.2fr 2fr;
+            }
+        }
+
+        .input-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .input-button {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .input-button:hover {
+            background: #138496;
+        }
+
+        .input-button.active {
+            background: #28a745;
+        }
+
+        .canvas-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            background: #2d2d2d;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .canvas-info {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .player {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 2fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1400px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← 返回首页</a>
+        
+        <div class="header">
+            <h1>⚙️ 帧同步演示</h1>
+            <p>实时多人游戏帧同步功能演示</p>
+        </div>
+
+        <div class="grid-container">
+            <!-- 左侧：连接和控制 -->
+            <div>
+                <div class="card">
+                    <h2>🔌 连接设置</h2>
+                    <div class="input-group">
+                        <label>服务器地址</label>
+                        <input type="text" id="serverUrl" value="ws://localhost:2567" placeholder="ws://localhost:2567">
+                    </div>
+                    <div class="input-group">
+                        <label>房间名称</label>
+                        <select id="roomName">
+                            <option value="game_room">game_room (帧同步房间)</option>
+                            <option value="my_room">my_room (普通房间)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>连接选项</label>
+                        <input type="text" id="roomOptions" value='{"fps": 20}' placeholder='{"fps": 20}'>
+                    </div>
+                    <button class="button" id="connectBtn" onclick="connectRoom()">连接房间</button>
+                    <button class="button danger" id="disconnectBtn" onclick="disconnectRoom()" disabled>断开连接</button>
+                </div>
+
+                <div class="card">
+                    <h2>🎮 输入控制</h2>
+                    <div class="input-controls">
+                        <button class="input-button" id="moveUp" onmousedown="sendInput('move', {x: 0, y: -1})" onmouseup="sendInput('move', {x: 0, y: 0})">↑ 上</button>
+                        <button class="input-button" id="moveDown" onmousedown="sendInput('move', {x: 0, y: 1})" onmouseup="sendInput('move', {x: 0, y: 0})">↓ 下</button>
+                        <button class="input-button" id="moveLeft" onmousedown="sendInput('move', {x: -1, y: 0})" onmouseup="sendInput('move', {x: 0, y: 0})">← 左</button>
+                        <button class="input-button" id="moveRight" onmousedown="sendInput('move', {x: 1, y: 0})" onmouseup="sendInput('move', {x: 0, y: 0})">→ 右</button>
+                        <button class="input-button" onclick="sendInput('attack', true)">⚔️ 攻击</button>
+                        <button class="input-button" onclick="sendInput('jump', true)">🦘 跳跃</button>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <label>自定义输入 (JSON)</label>
+                        <input type="text" id="customInput" placeholder='{"action": "custom", "data": {}}' style="margin-top: 5px;">
+                        <button class="button" onclick="sendCustomInput()" style="width: 100%; margin-top: 10px;">发送自定义输入</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间：Canvas 游戏视图 -->
+            <div>
+                <div class="card">
+                    <h2>🎮 游戏视图</h2>
+                    <div class="canvas-container">
+                        <canvas id="gameCanvas" width="800" height="500"></canvas>
+                        <div class="canvas-info">
+                            <div>使用方向键或 WASD 控制角色移动</div>
+                            <div style="margin-top: 5px;">空格键跳跃 | 点击按钮发送输入</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：状态和日志 -->
+            <div>
+                <div class="status-log-row">
+                    <div class="card">
+                        <h2>📊 连接状态</h2>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <label>连接状态</label>
+                                <value id="connectionStatus">未连接</value>
+                            </div>
+                            <div class="status-item">
+                                <label>房间 ID</label>
+                                <value id="roomId">-</value>
+                            </div>
+                            <div class="status-item">
+                                <label>会话 ID</label>
+                                <value id="sessionId">-</value>
+                            </div>
+                            <div class="status-item">
+                                <label>当前帧</label>
+                                <value id="currentFrame">0</value>
+                            </div>
+                            <div class="status-item">
+                                <label>目标 FPS</label>
+                                <value id="targetFPS">-</value>
+                            </div>
+                            <div class="status-item">
+                                <label>客户端数量</label>
+                                <value id="clientCount">0</value>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>📝 日志</h2>
+                        <button class="button" onclick="clearLog()" style="margin-bottom: 10px;">清空日志</button>
+                        <div class="log-container" id="logContainer" style="max-height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📖 使用说明</h2>
+            <div style="line-height: 1.8;">
+                <p><strong>1. 连接房间：</strong>输入服务器地址和房间名称，点击"连接房间"按钮。</p>
+                <p><strong>2. 发送输入：</strong>使用方向键按钮或自定义输入发送游戏输入。</p>
+                <p><strong>3. 查看状态：</strong>实时查看连接状态、当前帧号等信息。</p>
+                <p><strong>4. 监控日志：</strong>查看所有操作和消息的日志记录。</p>
+                <p style="margin-top: 10px; color: #666;">
+                    <strong>注意：</strong>确保服务器正在运行，并且已安装 Colyseus 客户端库。
+                    如果使用浏览器，需要先安装：<code>npm install colyseus.js</code>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let room = null;
+        let client = null;
+        let isConnected = false;
+        
+        // Canvas 相关
+        let canvas = null;
+        let ctx = null;
+        let players = new Map(); // 存储所有玩家
+        let localPlayer = null;
+        let animationFrameId = null;
+
+        // 日志函数
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // 更新日志数量
+            updateLogCount();
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+            updateLogCount();
+            addLog('日志已清空', 'info');
+        }
+
+        function updateLogCount() {
+            const logContainer = document.getElementById('logContainer');
+            const logCount = document.getElementById('logCount');
+            if (logContainer && logCount) {
+                const count = logContainer.children.length;
+                logCount.textContent = `(${count})`;
+            }
+        }
+
+        // 更新状态显示
+        function updateStatus() {
+            document.getElementById('connectionStatus').textContent = isConnected ? '已连接' : '未连接';
+            document.getElementById('roomId').textContent = room ? room.roomId : '-';
+            document.getElementById('sessionId').textContent = room ? room.sessionId : '-';
+            document.getElementById('clientCount').textContent = room && room.clients ? room.clients.length : '0';
+        }
+
+        // 连接房间
+        async function connectRoom() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const roomName = document.getElementById('roomName').value;
+            const optionsText = document.getElementById('roomOptions').value;
+
+            if (!serverUrl) {
+                alert('请输入服务器地址');
+                return;
+            }
+
+            // 检查 Colyseus 是否可用
+            if (typeof Colyseus === 'undefined') {
+                addLog('❌ Colyseus 客户端库未加载', 'error');
+                addLog('请确保已加载 Colyseus.js 库', 'error');
+                addLog('可以通过 CDN: https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js', 'info');
+                return;
+            }
+
+            try {
+                addLog(`正在连接到 ${serverUrl}...`, 'info');
+                
+                // 创建客户端
+                const client = new Colyseus.Client(serverUrl);
+                
+                // 解析连接选项
+                let options = {};
+                if (optionsText) {
+                    try {
+                        options = JSON.parse(optionsText);
+                    } catch (e) {
+                        addLog(`解析连接选项失败: ${e.message}，使用默认选项`, 'warning');
+                    }
+                }
+                
+                // 连接房间
+                room = await client.joinOrCreate(roomName, options);
+                isConnected = true;
+                
+                // 设置房间事件监听
+                room.onLeave(() => {
+                    isConnected = false;
+                    // 清理定时器
+                    if (room._playerUpdateInterval) {
+                        clearInterval(room._playerUpdateInterval);
+                    }
+                    // 清理玩家列表
+                    players.clear();
+                    localPlayer = null;
+                    room = null;
+                    updateStatus();
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    addLog('已离开房间', 'info');
+                });
+
+                room.onError((code, message) => {
+                    addLog(`房间错误 [${code}]: ${message}`, 'error');
+                });
+
+
+                // 监听帧同步消息（仅在连接时接收初始帧号）
+                room.onMessage('frameSync', (message) => {
+                    if (message.currentFrame !== undefined) {
+                        document.getElementById('currentFrame').textContent = message.currentFrame;
+                    }
+                    if (message.targetFPS !== undefined) {
+                        document.getElementById('targetFPS').textContent = message.targetFPS;
+                    }
+                    addLog(`收到初始帧同步: 帧=${message.currentFrame}, FPS=${message.targetFPS}`, 'info');
+                });
+
+                // 监听房间状态变化
+                room.onStateChange((state) => {
+                    // 更新帧号（从服务器状态）
+                    if (state.frame !== undefined) {
+                        document.getElementById('currentFrame').textContent = state.frame;
+                    }
+                    
+                    // 更新玩家列表和位置
+                    updatePlayersFromRoom();
+                });
+                
+                // 监听玩家加入消息
+                room.onMessage('playerJoined', (message) => {
+                    addLog(`玩家加入房间: ${message.sessionId.substring(0, 8)} (总玩家数: ${message.playerCount})`, 'success');
+                    updatePlayersFromRoom();
+                });
+                
+                // 监听玩家离开消息
+                room.onMessage('playerLeft', (message) => {
+                    addLog(`玩家离开房间: ${message.sessionId.substring(0, 8)} (总玩家数: ${message.playerCount})`, 'info');
+                    updatePlayersFromRoom();
+                });
+                
+                // 定期更新玩家列表（作为备用方案）
+                const playerUpdateInterval = setInterval(() => {
+                    if (isConnected && room) {
+                        updatePlayersFromRoom();
+                    } else {
+                        clearInterval(playerUpdateInterval);
+                    }
+                }, 1000); // 每秒更新一次
+                
+                // 存储 interval ID，以便在断开连接时清理
+                room._playerUpdateInterval = playerUpdateInterval;
+
+                // 监听其他消息
+                room.onMessage('chat', (message) => {
+                    addLog(`聊天消息 [${message.clientId}]: ${message.message}`, 'info');
+                });
+                
+                // 监听玩家操作消息
+                room.onMessage('playerAction', (message) => {
+                    const actionType = message.action || '未知操作';
+                    const playerId = message.sessionId ? message.sessionId.substring(0, 8) : '未知';
+                    const actionData = message.data ? JSON.stringify(message.data) : '';
+                    addLog(`玩家操作 [${playerId}]: ${actionType} ${actionData}`, 'info');
+                });
+
+                // 更新本地玩家ID为sessionId
+                if (localPlayer) {
+                    localPlayer.id = room.sessionId.substring(0, 8);
+                    players.delete('local');
+                    players.set(room.sessionId, localPlayer);
+                }
+                
+                // 初始化玩家列表
+                updatePlayersFromRoom();
+                
+                updateStatus();
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                
+                addLog(`✅ 成功连接到房间: ${roomName}`, 'success');
+                addLog(`房间 ID: ${room.roomId}`, 'info');
+                addLog(`会话 ID: ${room.sessionId}`, 'info');
+                
+            } catch (error) {
+                addLog(`❌ 连接失败: ${error.message}`, 'error');
+                console.error('连接错误:', error);
+                isConnected = false;
+                room = null;
+                updateStatus();
+            }
+        }
+
+
+        // 断开连接
+        async function disconnectRoom() {
+            if (room) {
+                try {
+                    await room.leave();
+                    addLog('已断开连接', 'info');
+                } catch (error) {
+                    addLog(`断开连接时出错: ${error.message}`, 'error');
+                }
+                room = null;
+            }
+            isConnected = false;
+            updateStatus();
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+        }
+
+        // 更新玩家列表（从房间状态）- 完全信任服务器状态
+        function updatePlayersFromRoom() {
+            if (!room || !canvas) return;
+            
+            // 从房间状态获取玩家信息
+            const clientIds = new Set();
+            
+            // 从房间状态获取玩家信息（主要方法）
+            if (room.state && room.state.players) {
+                // Colyseus 的 MapSchema 可以通过 forEach 遍历
+                if (room.state.players.forEach) {
+                    room.state.players.forEach((statePlayer, sessionId) => {
+                        if (statePlayer && sessionId) {
+                            clientIds.add(sessionId);
+                            
+                            // 创建或更新玩家（完全从服务器状态同步）
+                            if (!players.has(sessionId)) {
+                                // 创建新玩家
+                                const isLocal = sessionId === room.sessionId;
+                                const newPlayer = {
+                                    id: sessionId.substring(0, 8),
+                                    x: statePlayer.x || canvas.width / 2,
+                                    y: statePlayer.y || canvas.height / 2,
+                                    color: isLocal ? '#667eea' : `hsl(${Math.random() * 360}, 70%, 50%)`,
+                                    radius: 15,
+                                    vx: 0,
+                                    vy: 0,
+                                    speed: 3
+                                };
+                                players.set(sessionId, newPlayer);
+                                
+                                if (isLocal && !localPlayer) {
+                                    localPlayer = newPlayer;
+                                }
+                                
+                                addLog(`玩家加入: ${sessionId.substring(0, 8)}`, 'success');
+                                console.log(`创建玩家: ${sessionId.substring(0, 8)}`, newPlayer);
+                            } else {
+                                // 更新现有玩家位置（完全信任服务器状态）
+                                const localPlayerObj = players.get(sessionId);
+                                // 帧同步：所有玩家位置都从服务器同步
+                                localPlayerObj.x = statePlayer.x || localPlayerObj.x;
+                                localPlayerObj.y = statePlayer.y || localPlayerObj.y;
+                                // 清除本地速度，因为位置由服务器决定
+                                localPlayerObj.vx = 0;
+                                localPlayerObj.vy = 0;
+                            }
+                        }
+                    });
+                } else if (typeof room.state.players === 'object') {
+                    // 备用方法：如果是普通对象
+                    Object.keys(room.state.players).forEach(sessionId => {
+                        const statePlayer = room.state.players[sessionId];
+                        if (statePlayer && sessionId) {
+                            clientIds.add(sessionId);
+                            
+                            // 创建或更新玩家
+                            if (!players.has(sessionId)) {
+                                const isLocal = sessionId === room.sessionId;
+                                const newPlayer = {
+                                    id: sessionId.substring(0, 8),
+                                    x: statePlayer.x || canvas.width / 2,
+                                    y: statePlayer.y || canvas.height / 2,
+                                    color: isLocal ? '#667eea' : `hsl(${Math.random() * 360}, 70%, 50%)`,
+                                    radius: 15,
+                                    vx: 0,
+                                    vy: 0,
+                                    speed: 3
+                                };
+                                players.set(sessionId, newPlayer);
+                                
+                                if (isLocal && !localPlayer) {
+                                    localPlayer = newPlayer;
+                                }
+                                
+                                addLog(`玩家加入: ${sessionId.substring(0, 8)}`, 'success');
+                            } else {
+                                const localPlayerObj = players.get(sessionId);
+                                localPlayerObj.x = statePlayer.x || localPlayerObj.x;
+                                localPlayerObj.y = statePlayer.y || localPlayerObj.y;
+                                localPlayerObj.vx = 0;
+                                localPlayerObj.vy = 0;
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // 总是添加当前客户端（如果不在列表中）
+            if (room.sessionId && !clientIds.has(room.sessionId)) {
+                clientIds.add(room.sessionId);
+            }
+            
+            const clientIdsArray = Array.from(clientIds);
+            
+            // 移除已离开的玩家
+            const playersToRemove = [];
+            players.forEach((player, sessionId) => {
+                if (!clientIdsArray.includes(sessionId)) {
+                    playersToRemove.push(sessionId);
+                }
+            });
+            
+            playersToRemove.forEach(sessionId => {
+                players.delete(sessionId);
+                if (sessionId === room.sessionId) {
+                    localPlayer = null;
+                }
+                addLog(`玩家离开: ${sessionId.substring(0, 8)}`, 'info');
+                console.log(`移除玩家: ${sessionId.substring(0, 8)}`);
+            });
+            
+            // 更新客户端数量显示
+            if (document.getElementById('clientCount')) {
+                document.getElementById('clientCount').textContent = clientIdsArray.length;
+            }
+        }
+
+        // 发送输入
+        function sendInput(type, data) {
+            if (!isConnected || !room) {
+                addLog('请先连接房间', 'warning');
+                return;
+            }
+
+            const input = {
+                [type]: data
+            };
+
+            // 注意：帧同步模式下，不进行乐观更新
+            // 所有位置更新都由服务器端计算，客户端只负责显示
+            // handleInput(input); // 注释掉乐观更新
+
+            try {
+                room.send('input', {
+                    inputs: input,
+                    timestamp: Date.now()
+                });
+                
+                // 显示操作信息（重要操作）
+                if (type === 'attack' || type === 'jump') {
+                    addLog(`发送操作 [${type}]: ${JSON.stringify(data)}`, 'success');
+                } else if (type === 'move' && (data.x !== 0 || data.y !== 0)) {
+                    // 移动操作减少日志，但可以显示方向
+                    const direction = [];
+                    if (data.y < 0) direction.push('上');
+                    if (data.y > 0) direction.push('下');
+                    if (data.x < 0) direction.push('左');
+                    if (data.x > 0) direction.push('右');
+                    if (direction.length > 0) {
+                        // 减少移动日志频率，避免刷屏
+                        const now = Date.now();
+                        if (!window.lastMoveLogTime || now - window.lastMoveLogTime > 500) {
+                            addLog(`移动: ${direction.join('')}`, 'info');
+                            window.lastMoveLogTime = now;
+                        }
+                    }
+                }
+            } catch (error) {
+                addLog(`发送输入失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 发送自定义输入
+        function sendCustomInput() {
+            const customInputText = document.getElementById('customInput').value;
+            if (!customInputText) {
+                alert('请输入自定义输入');
+                return;
+            }
+
+            try {
+                const input = JSON.parse(customInputText);
+                if (!isConnected || !room) {
+                    addLog('请先连接房间', 'warning');
+                    return;
+                }
+
+                room.send('input', {
+                    inputs: input,
+                    timestamp: Date.now()
+                });
+                addLog(`发送自定义输入: ${customInputText}`, 'success');
+                document.getElementById('customInput').value = '';
+            } catch (error) {
+                addLog(`解析输入失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 键盘控制
+        const keys = {
+            up: false,
+            down: false,
+            left: false,
+            right: false
+        };
+
+        function updateMovement() {
+            if (!isConnected || !localPlayer) return;
+            
+            let moveX = 0;
+            let moveY = 0;
+            
+            if (keys.up) moveY -= 1;
+            if (keys.down) moveY += 1;
+            if (keys.left) moveX -= 1;
+            if (keys.right) moveX += 1;
+            
+            if (moveX !== 0 || moveY !== 0) {
+                sendInput('move', {x: moveX, y: moveY});
+            } else if (localPlayer.vx !== 0 || localPlayer.vy !== 0) {
+                sendInput('move', {x: 0, y: 0});
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!isConnected) return;
+
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    keys.up = true;
+                    updateMovement();
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    keys.down = true;
+                    updateMovement();
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    keys.left = true;
+                    updateMovement();
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    keys.right = true;
+                    updateMovement();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    sendInput('jump', true);
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!isConnected) return;
+
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    keys.up = false;
+                    updateMovement();
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    keys.down = false;
+                    updateMovement();
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    keys.left = false;
+                    updateMovement();
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    keys.right = false;
+                    updateMovement();
+                    break;
+            }
+        });
+
+        // 定期发送输入（即使没有变化，也发送当前状态）
+        setInterval(() => {
+            if (isConnected && localPlayer) {
+                updateMovement();
+            }
+        }, 50); // 每50ms发送一次
+
+        // 初始化 Canvas
+        function initCanvas() {
+            canvas = document.getElementById('gameCanvas');
+            if (!canvas) return;
+            
+            ctx = canvas.getContext('2d');
+            
+            // 创建本地玩家（临时，连接后会更新为sessionId）
+            localPlayer = {
+                id: 'local',
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                color: '#667eea',
+                radius: 15,
+                vx: 0,
+                vy: 0,
+                speed: 3
+            };
+            players.set('local', localPlayer);
+            
+            // 开始渲染循环
+            gameLoop();
+        }
+
+        // 游戏循环
+        function gameLoop() {
+            if (!canvas || !ctx) return;
+            
+            // 清空画布
+            ctx.fillStyle = '#2d2d2d';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制网格
+            drawGrid();
+            
+            // 更新玩家位置
+            updatePlayers();
+            
+            // 绘制所有玩家
+            players.forEach((player, id) => {
+                drawPlayer(player);
+            });
+            
+            // 绘制信息
+            drawInfo();
+            
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // 绘制网格
+        function drawGrid() {
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            
+            const gridSize = 50;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // 绘制玩家
+        function drawPlayer(player) {
+            ctx.save();
+            
+            // 绘制玩家圆圈
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 绘制边框
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 绘制玩家ID
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.id.substring(0, 8), player.x, player.y - player.radius - 5);
+            
+            // 如果是本地玩家，绘制特殊标记
+            if (room && player.id === room.sessionId.substring(0, 8)) {
+                ctx.strokeStyle = '#ffeb3b';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius + 3, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+
+        // 更新玩家位置（帧同步模式下，位置完全由服务器状态决定）
+        function updatePlayers() {
+            // 在帧同步模式下，玩家位置应该完全从服务器状态同步
+            // 这里不需要自己计算位置，位置已经在 updatePlayersFromRoom() 中从服务器状态同步了
+            // 保留此函数以防需要其他逻辑，但位置更新应该在状态变化时处理
+        }
+
+        // 绘制信息
+        function drawInfo() {
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, 10, 200, 100);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            
+            // 从 DOM 或房间状态获取信息
+            const frameElement = document.getElementById('currentFrame');
+            const fpsElement = document.getElementById('targetFPS');
+            const clientCountElement = document.getElementById('clientCount');
+            
+            const frame = frameElement ? frameElement.textContent : (room?.state?.frame || 0);
+            const fps = fpsElement ? fpsElement.textContent : '-';
+            const clientCount = clientCountElement ? clientCountElement.textContent : players.size;
+            
+            ctx.fillText(`帧: ${frame}`, 20, 30);
+            ctx.fillText(`FPS: ${fps}`, 20, 50);
+            ctx.fillText(`玩家: ${clientCount}`, 20, 70);
+            ctx.fillText(`本地玩家: ${localPlayer ? '是' : '否'}`, 20, 90);
+            
+            ctx.restore();
+        }
+
+        // 处理输入并更新本地玩家
+        function handleInput(inputs) {
+            if (!localPlayer) return;
+            
+            if (inputs.move) {
+                localPlayer.vx = inputs.move.x * localPlayer.speed;
+                localPlayer.vy = inputs.move.y * localPlayer.speed;
+            }
+            
+            if (inputs.jump) {
+                localPlayer.vy -= 5; // 跳跃效果
+            }
+        }
+
+        // 初始化
+        window.addEventListener('load', () => {
+            updateStatus();
+            initCanvas();
+            addLog('帧同步演示程序已就绪', 'success');
+            
+            // 检查 Colyseus 是否已加载
+            if (typeof Colyseus !== 'undefined') {
+                addLog('✅ Colyseus 客户端库已加载', 'success');
+            } else {
+                addLog('⚠️ Colyseus 客户端库未加载', 'warning');
+                addLog('正在尝试从 CDN 加载...', 'info');
+            }
+        });
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', () => {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            if (room) {
+                room.leave();
+            }
+        });
+    </script>
+</body>
+</html>
+
