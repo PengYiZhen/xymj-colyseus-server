@@ -5,6 +5,9 @@ import express from "express";
 import path from "path";
 import swaggerUi from "swagger-ui-express";
 import "reflect-metadata";
+import { useExpressServer } from "routing-controllers";
+import { getMetadataArgsStorage } from "routing-controllers";
+import { routingControllersToSpec } from "routing-controllers-openapi";
 
 /**
  * Import your Room files
@@ -21,10 +24,16 @@ import RedisClient from "./utils/redis";
 /**
  * Import routes and middleware
  */
-import routes from "./routes";
 import { errorMiddleware, notFoundMiddleware } from "./middleware/error.middleware";
 import appConfig from "./config";
-import { swaggerSpec } from "./config/swagger";
+import { swaggerSchemas, swaggerTags } from "./config/swagger-schemas";
+import { routeConfig } from "./routes";
+
+/**
+ * Import controllers (自动加载所有控制器)
+ * tsx watch 会自动追踪所有被导入的文件，实现热更新
+ */
+import controllers from "./controllers/autoLoad/index";
 
 export default config({
 
@@ -72,13 +81,62 @@ export default config({
         app.use(express.urlencoded({ extended: true }));
 
         /**
-         * Swagger API 文档
+         * 使用 routing-controllers 注册装饰器控制器
+         * 自动加载所有控制器（从 controllers/autoLoad/index.ts 导入）
+         */
+        useExpressServer(app, {
+            routePrefix: routeConfig.apiPrefix,
+            controllers: controllers,
+            middlewares: [],
+            interceptors: [],
+            validation: {
+                whitelist: true,
+                forbidNonWhitelisted: true,
+                skipMissingProperties: false,
+            },
+            defaultErrorHandler: false, // 使用自定义错误处理
+        });
+
+        /**
+         * Swagger API 文档（使用 routing-controllers-openapi 生成）
          */
         if (appConfig.swagger.enabled) {
+            const storage = getMetadataArgsStorage();
+            const spec = routingControllersToSpec(storage, {
+                routePrefix: routeConfig.apiPrefix,
+                controllers: controllers, // 使用自动加载的控制器
+            }, {
+                info: {
+                    title: appConfig.swagger.title,
+                    version: appConfig.swagger.version,
+                    description: appConfig.swagger.description,
+                    contact: appConfig.swagger.contact.name || appConfig.swagger.contact.email || appConfig.swagger.contact.url
+                        ? {
+                            name: appConfig.swagger.contact.name,
+                            email: appConfig.swagger.contact.email,
+                            url: appConfig.swagger.contact.url,
+                          }
+                        : undefined,
+                },
+                servers: appConfig.swagger.servers,
+                components: {
+                    securitySchemes: {
+                        bearerAuth: {
+                            type: 'http',
+                            scheme: 'bearer',
+                            bearerFormat: 'JWT',
+                            description: '输入 JWT 令牌，格式：Bearer {token}',
+                        },
+                    },
+                    schemas: swaggerSchemas as any,
+                },
+                tags: swaggerTags as any,
+            });
+
             app.use(
                 appConfig.swagger.path,
                 swaggerUi.serve,
-                swaggerUi.setup(swaggerSpec, {
+                swaggerUi.setup(spec, {
                     customCss: '.swagger-ui .topbar { display: none }',
                     customSiteTitle: appConfig.swagger.title,
                 })
@@ -86,50 +144,6 @@ export default config({
             console.log(`Swagger 文档已启用: http://localhost:${appConfig.app.port}${appConfig.swagger.path}`);
         }
 
-        /**
-         * API 路由
-         */
-        app.use("/api", routes);
-
-        /**
-         * 健康检查端点
-         */
-        /**
-         * @swagger
-         * /health:
-         *   get:
-         *     tags: [健康检查]
-         *     summary: 健康检查
-         *     description: 检查服务运行状态
-         *     responses:
-         *       200:
-         *         description: 服务运行正常
-         *         content:
-         *           application/json:
-         *             schema:
-         *               type: object
-         *               properties:
-         *                 success:
-         *                   type: boolean
-         *                   example: true
-         *                 message:
-         *                   type: string
-         *                   example: 服务运行正常
-         *                 timestamp:
-         *                   type: string
-         *                   format: date-time
-         *                 version:
-         *                   type: string
-         *                   example: 1.0.0
-         */
-        app.get("/health", (req, res) => {
-            res.json({
-                success: true,
-                message: "服务运行正常",
-                timestamp: new Date().toISOString(),
-                version: appConfig.app.version,
-            });
-        });
 
         /**
          * Use @colyseus/playground
@@ -163,10 +177,11 @@ export default config({
          */
         try {
             await createConnection();
-            console.log("数据库初始化完成");
-        } catch (error) {
-            console.error("数据库初始化失败:", error);
-            throw error;
+            console.log("✅ 数据库初始化完成");
+        } catch (err: any) {
+            const errorMsg = err?.message || err?.code || '未知错误';
+            console.error("❌ 数据库初始化失败:", errorMsg);
+            // throw error;
         }
 
         /**
@@ -175,12 +190,15 @@ export default config({
         try {
             const redis = RedisClient.getInstance();
             await redis.connect();
-            console.log("Redis 初始化完成");
-        } catch (error) {
-            console.error("Redis 初始化失败:", error); 
+            console.log("✅ Redis 初始化完成");
+        } catch (err: any) {
+            const errorMsg = err?.message || err?.code || '未知错误';
+            console.error("❌ Redis 初始化失败:", errorMsg); 
             // Redis 连接失败不阻止服务器启动，但会记录错误
         }
 
-        console.log(`服务器配置完成，环境: ${appConfig.app.env}`);
+        console.log(`✅ 服务器配置完成，环境: ${appConfig.app.env}`);
+
+        console.log(`🎯 小游码匠 - Colyseus Server 🎯 `);
     }
 });

@@ -18,35 +18,47 @@ class RedisClient {
    * 连接 Redis
    */
   async connect(): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
-      return;
+    // 如果已经有客户端且处于连接中 / 已连接状态，直接复用，避免重复 connect 抛错
+    if (this.client) {
+      const status = this.client.status;
+      // ioredis 常见状态: 'wait', 'connecting', 'connect', 'ready', 'reconnecting', 'end', 'close'
+      if (status === 'ready' || status === 'connecting' || status === 'connect' || status === 'reconnecting') {
+        return;
+      }
+      // 如果是已结束状态，清理掉，重新创建
+      if (status === 'end' || status === 'close') {
+        this.client = null;
+      }
     }
 
-    this.client = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-      db: config.redis.db,
-      keyPrefix: config.redis.keyPrefix,
-      connectTimeout: config.redis.connectTimeout,
-      lazyConnect: config.redis.lazyConnect,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-    });
+    if (!this.client) {
+      this.client = new Redis({
+        host: config.redis.host,
+        port: config.redis.port,
+        password: config.redis.password,
+        db: config.redis.db,
+        keyPrefix: config.redis.keyPrefix,
+        connectTimeout: config.redis.connectTimeout,
+        lazyConnect: config.redis.lazyConnect,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+      });
 
-    this.client.on('connect', () => {
-      console.log('Redis 连接成功');
-    });
+      this.client.on('connect', () => {
+        console.log('✅ Redis 连接成功');
+      });
 
-    this.client.on('error', (err) => {
-      console.error('Redis 连接错误:', err);
-    });
+      this.client.on('error', (err: any) => {
+        const errorMsg = err?.message || err?.code || '未知错误';
+        console.error(`❌ Redis 连接错误: ${errorMsg}`);
+      });
 
-    this.client.on('close', () => {
-      console.log('Redis 连接已关闭');
-    });
+      this.client.on('close', () => {
+        console.log('✅ Redis 连接已关闭');
+      });
+    }
 
     if (!config.redis.lazyConnect) {
       await this.client.connect();

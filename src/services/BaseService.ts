@@ -27,8 +27,9 @@ export abstract class BaseService<T extends BaseEntity> {
    * 创建
    */
   async create(entity: Partial<T>): Promise<T> {
-    const newEntity = this.repository.create(entity);
-    return await this.repository.save(newEntity);
+    const newEntity = this.repository.create(entity as any);
+    const saved = await this.repository.save(newEntity);
+    return Array.isArray(saved) ? saved[0] : saved;
   }
 
   /**

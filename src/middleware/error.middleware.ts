@@ -9,6 +9,11 @@ export function errorMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  // 如果响应头已经发送，交给下一个错误处理中间件，避免重复写入
+  if (res.headersSent) {
+    return next(err);
+  }
+
   console.error('错误:', err);
 
   const statusCode = (err as any).statusCode || 500;
@@ -25,6 +30,11 @@ export function errorMiddleware(
  * 404 处理中间件
  */
 export function notFoundMiddleware(req: Request, res: Response): void {
+  // 如果已经有响应，就不再写入 404，避免重复设置响应头
+  if (res.headersSent) {
+    return;
+  }
+
   res.status(404).json({
     success: false,
     message: `路由 ${req.method} ${req.path} 不存在`,

@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import config from '../config';
 
 export interface TokenPayload {
@@ -18,18 +18,20 @@ export class JWTUtil {
    * 生成访问令牌
    */
   static generateAccessToken(payload: TokenPayload): string {
-    return jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn,
-    });
+    const options: SignOptions = {
+      expiresIn: config.jwt.expiresIn as SignOptions['expiresIn'],
+    };
+    return jwt.sign(payload, config.jwt.secret, options);
   }
 
   /**
    * 生成刷新令牌
    */
   static generateRefreshToken(payload: TokenPayload): string {
-    return jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshExpiresIn,
-    });
+    const options: SignOptions = {
+      expiresIn: config.jwt.refreshExpiresIn as SignOptions['expiresIn'],
+    };
+    return jwt.sign(payload, config.jwt.refreshSecret, options);
   }
 
   /**

@@ -11,15 +11,15 @@ export class GameRoom extends FrameSyncRoom<MyRoomState> {
 
   onCreate(options: any) {
     console.log("[GameRoom] 房间创建:", this.roomId);
-
+   
     // 初始化帧同步（20 FPS）
     this.initFrameSync({
       targetFPS: options.fps || 20,
-      enabled: true,
+      enabled: true,  
       recordFrames: options.recordFrames || false,
     });
 
-    // 启动帧同步
+    // 启动帧同步   
     this.startFrameSync();
 
     // 监听其他消息

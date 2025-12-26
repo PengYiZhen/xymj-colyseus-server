@@ -4,7 +4,7 @@ import { getConnection } from '../database/connection';
 import { User } from '../models/User';
 import JWTUtil, { TokenPair } from '../utils/jwt';
 import RedisClient from '../utils/redis';
-import { LoginDto, RegisterDto } from '../dto/AuthDto';
+import { LoginDto, RegisterDto } from '../dto/AuthDto'; 
 
 export class AuthService {
   private get userRepository(): Repository<User> {

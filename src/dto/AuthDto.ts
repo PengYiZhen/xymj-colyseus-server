@@ -1,4 +1,5 @@
 import { IsEmail, IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class RegisterDto {
   @IsString()
@@ -27,5 +28,10 @@ export class LoginDto {
   @IsString()
   @MinLength(6)
   password!: string;
+}
+
+export class RefreshTokenDto {
+  @IsString()
+  refreshToken!: string;
 }
 

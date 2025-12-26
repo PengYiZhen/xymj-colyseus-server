@@ -8,9 +8,11 @@
     "node": ">= 20.9.0"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node scripts/dev.mjs",
+    "watch-controllers": "node scripts/watch-controllers.mjs",
+    "generate-controllers": "node scripts/watch-controllers.mjs",
     "loadtest": "tsx loadtest/example.ts --room my_room --numClients 2",
-    "build": "npm run clean && tsc && npm run copy-public",
+    "build": "npm run clean && npm run generate-controllers && tsc && npm run copy-public",
     "copy-public": "node -e \"require('fs').cpSync('src/public', 'build/public', {recursive: true, force: true})\"",
     "clean": "rimraf build",
     "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
@@ -51,6 +53,8 @@
     "mysql2": "^3.16.0",
     "redis": "^4.6.12",
     "reflect-metadata": "^0.1.13",
+    "routing-controllers": "^0.11.3",
+    "routing-controllers-openapi": "^5.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.17"

@@ -33,10 +33,10 @@ export async function createConnection(): Promise<DataSource> {
   
   try {
     await dataSource.initialize();
-    console.log('数据库连接成功');
+    console.log('✅ 数据库连接成功');
     return dataSource;
   } catch (error) {
-    console.error('数据库连接失败:', error);
+    console.error('❌ 数据库连接失败:', error);
     throw error;
   }
 }
@@ -58,7 +58,7 @@ export async function closeConnection(): Promise<void> {
   if (dataSource && dataSource.isInitialized) {
     await dataSource.destroy();
     dataSource = null;
-    console.log('数据库连接已关闭');
+    console.log('✅ 数据库连接已关闭');
   }
 }
 
