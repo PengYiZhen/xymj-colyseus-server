@@ -1,6 +1,6 @@
 # 🎮 多人在线游戏服务端集成框架-xymj-colyseus-server
 
-基于 Colyseus 的多人游戏服务器，使用 TypeScript、Express、TypeORM 和 Redis 构建。
+【小游码匠】基于 Colyseus 的多人游戏服务器，使用 TypeScript、Express、TypeORM 和 Redis 构建。
 
 ## ✨ 特性
 
@@ -14,6 +14,12 @@
 - ⚡ **Redis 缓存** - 高性能缓存支持
 - 🎨 **帧同步** - 支持帧同步游戏房间
 - 📦 **TypeScript** - 完整的类型支持
+
+![](./homepage.png)
+
+#### 帧同步演示教程
+
+![](./framesync.png)
 
 ## 📋 目录结构
 
@@ -228,16 +234,61 @@ export class User extends BaseEntity {
 在 `src/rooms` 目录下创建房间类：
 
 ```typescript
-import { Room, Client } from 'colyseus';
+import { Room, Client } from '@colyseus/core';
 import { MyRoomState } from './schema/MyRoomState';
+import { RequireAuth } from '../utils/decorators/RequireAuth';
 
 export class MyRoom extends Room<MyRoomState> {
+  maxClients = 4;
+  state = new MyRoomState();
+
+  /**
+   * 房间创建时的回调
+   * 使用 @RequireAuth() 装饰器可以要求创建房间时提供有效的 JWT token
+   * 
+   * 客户端需要在 options 中传递：
+   * - token: JWT access token（必需，或使用 accessToken）
+   * - accessToken: JWT access token（必需，与 token 等效）
+   * 
+   * 验证成功后，装饰器会自动在 options 中添加用户信息：
+   * - options.userId: 用户ID（来自 JWT payload）
+   * - options.username: 用户名（来自 JWT payload）
+   * - options.email: 用户邮箱（来自 JWT payload）
+   * - options.tokenPayload: 完整的 JWT payload 对象，包含所有 token 中的信息
+   */
+  @RequireAuth()
   onCreate(options: any) {
+    // 可以使用装饰器自动添加的用户信息
+    console.log('房间创建者:', options.userId, options.username);
+    console.log('Token Payload:', options.tokenPayload);
+    // options.tokenPayload 包含完整的 JWT payload，例如：
+    // {
+    //   userId: "123",
+    //   username: "user123",
+    //   email: "user@example.com",
+    //   iat: 1234567890,  // 签发时间
+    //   exp: 1234571490   // 过期时间
+    // }
+    
     this.setState(new MyRoomState());
     // 房间初始化逻辑
   }
 
+  /**
+   * 玩家加入房间时的回调
+   * 使用 @RequireAuth() 装饰器可以要求加入房间时提供有效的 JWT token
+   * 
+   * 客户端需要在 options 中传递：
+   * - token: JWT access token（必需，或使用 accessToken）
+   * - accessToken: JWT access token（必需，与 token 等效）
+   * 
+   * 验证成功后，装饰器会自动在 options 中添加用户信息（同上）
+   */
+  @RequireAuth()
   onJoin(client: Client, options: any) {
+    // 可以使用装饰器自动添加的用户信息
+    console.log('玩家加入:', options.userId, options.username);
+    console.log('Token Payload:', options.tokenPayload);
     // 玩家加入逻辑
   }
 
@@ -250,6 +301,66 @@ export class MyRoom extends Room<MyRoomState> {
   }
 }
 ```
+
+#### 安全机制说明
+
+**@RequireAuth() 装饰器** 提供了房间级别的 JWT token 验证：
+
+1. **功能**：
+   - 验证客户端传递的 JWT token 是否有效
+   - 对比 Redis 中存储的 token 是否一致
+   - 验证失败时自动拒绝连接并返回"授权失败"错误
+
+2. **使用方式**：
+   - 在 `onCreate` 或 `onJoin` 方法上添加 `@RequireAuth()` 装饰器
+   - 客户端连接时需要在 `options` 中传递 `token` 或 `accessToken`
+
+3. **客户端连接示例**：
+```typescript
+// 客户端连接代码
+const room = await client.joinOrCreate("my_room", {
+  // 必需参数（二选一）：
+  token: "your-jwt-access-token",        // 方式1：使用 token
+  // 或
+  // accessToken: "your-jwt-access-token", // 方式2：使用 accessToken（与 token 等效）
+  
+  // 可选：其他自定义参数
+  fps: 20,
+  gameMode: "ranked",
+  // ...
+});
+```
+
+**注意**：`token` 和 `accessToken` 是等效的，装饰器会优先查找 `token`，如果不存在则查找 `accessToken`。
+
+4. **验证流程**：
+   - 检查是否提供了 `token` 或 `accessToken`
+   - 验证 JWT token 的有效性（签名、过期时间等）
+   - 从 Redis 中获取存储的 accessToken 并对比
+   - 如果 Redis 中没有 accessToken，则检查是否有 refreshToken（向后兼容）
+   - 验证成功后，将用户信息附加到 `options` 中供后续使用：
+     - `options.userId` - 用户ID
+     - `options.username` - 用户名
+     - `options.email` - 用户邮箱
+     - `options.tokenPayload` - 完整的 JWT payload 对象（包含所有 token 中的信息，如签发时间、过期时间等）
+
+5. **options.tokenPayload 说明**：
+   `tokenPayload` 是 JWT token 解码后的完整 payload 对象，包含：
+   ```typescript
+   {
+     userId: string | number,    // 用户ID
+     username?: string,          // 用户名（如果 token 中包含）
+     email?: string,             // 用户邮箱（如果 token 中包含）
+     iat: number,               // 签发时间（Unix 时间戳）
+     exp: number,               // 过期时间（Unix 时间戳）
+     // ... 其他自定义字段
+   }
+   ```
+   你可以在 `onCreate` 或 `onJoin` 方法中通过 `options.tokenPayload` 访问这些信息。
+
+6. **错误处理**：
+   - 如果验证失败，会抛出 `AuthenticationError`
+   - Colyseus 会自动拒绝连接并返回错误信息给客户端
 
 ## 🔧 配置说明
 
@@ -286,23 +397,9 @@ Redis 配置支持：
 # 开发模式（自动监听和热更新）
 npm run dev
 
-# 监听控制器目录变化（自动更新控制器索引）
-npm run watch-controllers
-
-# 生成控制器索引（一次性）
-npm run generate-controllers
-
 # 构建生产版本
 npm run build
 
-# 清理构建文件
-npm run clean
-
-# 运行测试
-npm run test
-
-# 负载测试
-npm run loadtest
 ```
 
 ## 🛠️ 技术栈
@@ -412,9 +509,9 @@ UNLICENSED
 
 ## 📞 联系方式
 
-如有问题，请提交 Issue 或联系项目维护者。
+如有问题，请提交 Issue 或联系项目维护者。 & 公众号进群研讨
 
 ---
 
-**小游码匠 - Colyseus Server** 🎮
+**小游码匠 - Xymj-Colyseus Server** 🎮
 
