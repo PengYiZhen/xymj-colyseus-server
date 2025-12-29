@@ -1,6 +1,7 @@
 import { Client } from "@colyseus/core";
 import { FrameSyncRoom, ClientInput } from "../utils/FrameSync";
 import { MyRoomState, Player } from "./schema/MyRoomState";
+import { RequireAuth } from "../utils/decorators/RequireAuth";
 
 /**
  * 游戏房间示例 - 使用帧同步
@@ -9,6 +10,7 @@ export class GameRoom extends FrameSyncRoom<MyRoomState> {
   maxClients = 4;
   state = new MyRoomState();
 
+  // @RequireAuth()
   onCreate(options: any) {
     console.log("[GameRoom] 房间创建:", this.roomId);
    
@@ -29,6 +31,7 @@ export class GameRoom extends FrameSyncRoom<MyRoomState> {
     });
   }
 
+  // @RequireAuth()
   onJoin(client: Client, options: any) {
     console.log(`[GameRoom] ${client.sessionId} 加入房间`);
     

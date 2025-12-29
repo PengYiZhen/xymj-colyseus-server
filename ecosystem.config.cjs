@@ -8,8 +8,8 @@ const os = require('os');
 
 module.exports = {
   apps : [{
-    name: "colyseus-app",
-    script: 'build/index.js',
+    name: "xymj-colyseus-app",
+    script: 'dist/index.js',
     time: true,
     watch: false,
     instances: os.cpus().length,

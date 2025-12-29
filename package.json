@@ -3,7 +3,7 @@
   "name": "xymj-colyseus-server",
   "version": "1.0.0",
   "description": "npm init template for bootstrapping an empty Colyseus project",
-  "main": "build/index.js",
+  "main": "dist/index.js",
   "engines": {
     "node": ">= 20.9.0"
   },
@@ -12,9 +12,9 @@
     "watch-controllers": "node scripts/watch-controllers.mjs",
     "generate-controllers": "node scripts/watch-controllers.mjs",
     "loadtest": "tsx loadtest/example.ts --room my_room --numClients 2",
-    "build": "npm run clean && npm run generate-controllers && tsc && npm run copy-public",
-    "copy-public": "node -e \"require('fs').cpSync('src/public', 'build/public', {recursive: true, force: true})\"",
-    "clean": "rimraf build",
+    "build": "npm run clean && npm run generate-controllers-once && tsc",
+    "generate-controllers-once": "node scripts/generate-controllers.mjs",
+    "clean": "rimraf dist",
     "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
   },
   "author": "",

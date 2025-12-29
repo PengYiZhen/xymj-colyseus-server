@@ -56,7 +56,7 @@ export default config({
         /**
          * 静态文件服务（提供 public 目录下的文件）
          * 开发环境：src/public
-         * 生产环境：build/public
+         * 生产环境：dist/public
          */
         const isDev = appConfig.app.env === 'development';
         const publicPath = isDev 

@@ -1,11 +1,12 @@
 # 🎮 多人在线游戏服务端集成框架-xymj-colyseus-server
 
-【小游码匠】基于 Colyseus 的多人游戏服务器，使用 TypeScript、Express、TypeORM 和 Redis 等构建。
+基于 Colyseus 的多人游戏服务器，使用 TypeScript、Express、TypeORM 和 Redis 构建。
 
 ## ✨ 特性
 
 - 🎯 **Colyseus 游戏服务器** - 支持实时多人游戏
 - 🚀 **装饰器路由** - 使用 `routing-controllers` 实现 NestJS 风格的 API
+- 🔄 **自动控制器加载** - 自动扫描并注册所有控制器，无需手动配置
 - 🔥 **热更新支持** - 开发环境下自动重载，提升开发效率
 - 📚 **Swagger API 文档** - 自动生成完整的 API 文档
 - 🔐 **JWT 认证** - 完整的用户认证和授权系统
@@ -13,10 +14,6 @@
 - ⚡ **Redis 缓存** - 高性能缓存支持
 - 🎨 **帧同步** - 支持帧同步游戏房间
 - 📦 **TypeScript** - 完整的类型支持
-
-![小游码匠](./homepage.png)
-#### 同步帧教学演示
-![小游码匠](./framesync.png)
 
 ## 📋 目录结构
 
@@ -136,7 +133,7 @@ npm run build
 ### 运行生产版本
 
 ```bash
-node build/index.js
+node dist/index.js
 ```
 
 ## 📖 API 文档
@@ -416,9 +413,8 @@ UNLICENSED
 ## 📞 联系方式
 
 如有问题，请提交 Issue 或联系项目维护者。
-或者微信公众号-小游码匠-留言建议
 
 ---
 
-**微信公众-小游码匠 - Colyseus Server** 🎮
+**小游码匠 - Colyseus Server** 🎮
 
