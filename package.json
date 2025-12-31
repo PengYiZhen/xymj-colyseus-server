@@ -12,7 +12,8 @@
     "watch-controllers": "node scripts/watch-controllers.mjs",
     "generate-controllers": "node scripts/watch-controllers.mjs",
     "loadtest": "tsx loadtest/example.ts --room my_room --numClients 2",
-    "build": "npm run clean && npm run generate-controllers-once && tsc",
+    "build": "npm run clean && npm run generate-controllers-once && tsc && npm run copy-package",
+    "copy-package": "node scripts/copy-package.mjs",
     "generate-controllers-once": "node scripts/generate-controllers.mjs",
     "clean": "rimraf dist",
     "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
