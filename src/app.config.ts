@@ -28,6 +28,7 @@ import { errorMiddleware, notFoundMiddleware } from "./middleware/error.middlewa
 import appConfig from "./config";
 import { swaggerSchemas, swaggerTags } from "./config/swagger-schemas";
 import { routeConfig } from "./routes";
+import { fixSwaggerMetadata } from "./utils/swagger-register";
 
 /**
  * Import controllers (自动加载所有控制器)
@@ -101,47 +102,57 @@ export default config({
          * Swagger API 文档（使用 routing-controllers-openapi 生成）
          */
         if (appConfig.swagger.enabled) {
-            const storage = getMetadataArgsStorage();
-            const spec = routingControllersToSpec(storage, {
-                routePrefix: routeConfig.apiPrefix,
-                controllers: controllers, // 使用自动加载的控制器
-            }, {
-                info: {
-                    title: appConfig.swagger.title,
-                    version: appConfig.swagger.version,
-                    description: appConfig.swagger.description,
-                    contact: appConfig.swagger.contact.name || appConfig.swagger.contact.email || appConfig.swagger.contact.url
-                        ? {
-                            name: appConfig.swagger.contact.name,
-                            email: appConfig.swagger.contact.email,
-                            url: appConfig.swagger.contact.url,
-                          }
-                        : undefined,
-                },
-                servers: appConfig.swagger.servers,
-                components: {
-                    securitySchemes: {
-                        bearerAuth: {
-                            type: 'http',
-                            scheme: 'bearer',
-                            bearerFormat: 'JWT',
-                            description: '输入 JWT 令牌，格式：Bearer {token}',
-                        },
+            try {
+                const storage = getMetadataArgsStorage();
+                
+                // 修复 routing-controllers-openapi 库的 bug
+                fixSwaggerMetadata(storage);
+                
+                const spec = routingControllersToSpec(storage, {
+                    routePrefix: routeConfig.apiPrefix,
+                    controllers: controllers, // 使用自动加载的控制器
+                }, {
+                    info: {
+                        title: appConfig.swagger.title,
+                        version: appConfig.swagger.version,
+                        description: appConfig.swagger.description,
+                        contact: appConfig.swagger.contact.name || appConfig.swagger.contact.email || appConfig.swagger.contact.url
+                            ? {
+                                name: appConfig.swagger.contact.name,
+                                email: appConfig.swagger.contact.email,
+                                url: appConfig.swagger.contact.url,
+                              }
+                            : undefined,
                     },
-                    schemas: swaggerSchemas as any,
-                },
-                tags: swaggerTags as any,
-            });
+                    servers: appConfig.swagger.servers,
+                    components: {
+                        securitySchemes: {
+                            bearerAuth: {
+                                type: 'http',
+                                scheme: 'bearer',
+                                bearerFormat: 'JWT',
+                                description: '输入 JWT 令牌，格式：Bearer {token}',
+                            },
+                        },
+                        schemas: swaggerSchemas as any,
+                    },
+                    tags: swaggerTags as any,
+                });
 
-            app.use(
-                appConfig.swagger.path,
-                swaggerUi.serve,
-                swaggerUi.setup(spec, {
-                    customCss: '.swagger-ui .topbar { display: none }',
-                    customSiteTitle: appConfig.swagger.title,
-                })
-            );
-            console.log(`Swagger 文档已启用: http://localhost:${appConfig.app.port}${appConfig.swagger.path}`);
+                app.use(
+                    appConfig.swagger.path,
+                    swaggerUi.serve,
+                    swaggerUi.setup(spec, {
+                        customCss: '.swagger-ui .topbar { display: none }',
+                        customSiteTitle: appConfig.swagger.title,
+                    })
+                );
+                console.log(`Swagger 文档已启用: http://localhost:${appConfig.app.port}${appConfig.swagger.path}`);
+            } catch (error: any) {
+                console.error('❌ Swagger 文档生成失败:', error.message);
+                console.error('错误堆栈:', error.stack);
+                // 不阻止服务器启动，但记录错误
+            }
         }
 
 

@@ -10,7 +10,7 @@ export class GameRoom extends FrameSyncRoom<MyRoomState> {
   maxClients = 4;
   state = new MyRoomState();
 
-  // @RequireAuth()
+  @RequireAuth()
   onCreate(options: any) {
     console.log("[GameRoom] 房间创建:", this.roomId);
    

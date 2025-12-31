@@ -17,7 +17,7 @@ export class AuthenticationError extends Error {
  * 用于验证JWT token是否与Redis中存储的token一致
  * 
  * 使用方式：
- * @RequireAuth()
+//  * @RequireAuth()
  * onJoin(client: Client, options: any) {
  *   // options.token 应该包含JWT token
  * }
