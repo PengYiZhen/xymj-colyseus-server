@@ -42,7 +42,7 @@ export class AuthController {
       ...errorResponse(400, '注册失败'),
     },
   })
-  async register(@Body({ type: RegisterDto }) body: RegisterDto, @Res() res: Response): Promise<Response> {
+  async register(@Body() body: RegisterDto, @Res() res: Response): Promise<Response> {
     try {
       const result = await this.authService.register(body);
       return ResponseUtil.success(res, result, '注册成功', 201);
@@ -77,7 +77,7 @@ export class AuthController {
       ...errorResponse(401, '登录失败'),
     },
   })
-  async login(@Body({ type: LoginDto }) body: LoginDto, @Res() res: Response): Promise<Response> {
+  async login(@Body() body: LoginDto, @Res() res: Response): Promise<Response> {
     try {
       const result = await this.authService.login(body);
       return ResponseUtil.success(res, result, '登录成功');
@@ -113,7 +113,7 @@ export class AuthController {
     },
   })
   async refreshToken(
-    @Body({ type: RefreshTokenDto }) body: RefreshTokenDto,
+    @Body() body: RefreshTokenDto,
     @Res() res: Response
   ): Promise<Response> {
     try {
