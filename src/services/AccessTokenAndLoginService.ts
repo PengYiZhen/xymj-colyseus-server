@@ -1,6 +1,8 @@
 import axios from "axios";
 import { DouYinConfig, WeiXinConfig } from "../config/minigame";
 import RedisClient from "../utils/redis";
+import JWTUtil, { TokenPair } from "../utils/jwt";
+import config from "../config";
 
 export interface AccessToken {
     access_token: string;
@@ -24,6 +26,7 @@ export interface DouYinCode2SessionResponse {
     errcode?: number; // 详细错误号
     errmsg?: string; // 错误信息
     message?: string; // 错误信息（同 errmsg）
+    token?: string; // JWT token
 }
 
 /**
@@ -35,6 +38,7 @@ export interface WeiXinCode2SessionResponse {
     unionid?: string; // 用户在开放平台的唯一标识符
     errcode?: number; // 错误码，0 表示成功
     errmsg?: string; // 错误信息
+    token?: string; // JWT token
 }
 
 /**
@@ -49,6 +53,34 @@ export class AccessTokenAndLoginService {
     private redis: RedisClient;
     private readonly DOUYIN_TOKEN_KEY = "douyin_access_token";
     private readonly WEIXIN_TOKEN_KEY = "weixin_access_token";
+
+    /**
+     * 将JWT过期时间字符串转换为秒数
+     * 支持格式: '1h', '24h', '7d', '3600' (秒)
+     */
+    private parseExpiresInToSeconds(expiresIn: string): number {
+        // 如果是纯数字，直接返回
+        if (/^\d+$/.test(expiresIn)) {
+            return parseInt(expiresIn, 10);
+        }
+        
+        // 解析带单位的字符串
+        const match = expiresIn.match(/^(\d+)([smhd])$/);
+        if (!match) {
+            return 3600; // 默认1小时
+        }
+        
+        const value = parseInt(match[1], 10);
+        const unit = match[2];
+        
+        switch (unit) {
+            case 's': return value;
+            case 'm': return value * 60;
+            case 'h': return value * 60 * 60;
+            case 'd': return value * 24 * 60 * 60;
+            default: return 3600;
+        }
+    }
 
     constructor() {
         this.douyinAccessTokenUrl = `https://minigame.zijieapi.com/mgplatform/api/apps/v2/token`;
@@ -175,6 +207,40 @@ export class AccessTokenAndLoginService {
                 throw new Error(`获取抖音用户信息失败: ${errorMsg} (error: ${errorCode})`);
             }
 
+            // 使用 openid 或 anonymous_openid 或 unionid 作为用户标识
+            const userId = response.data.openid || response.data.anonymous_openid || response.data.unionid || '';
+            
+            // 生成 JWT token
+            let jwtToken: string | undefined;
+            if (userId) {
+                const tokens = JWTUtil.generateTokenPair({
+                    userId: userId,
+                    username: userId, // 使用 openid 作为 username
+                    openid: response.data.openid,
+                    anonymous_openid: response.data.anonymous_openid,
+                    unionid: response.data.unionid,
+                    platform: 'douyin'
+                });
+
+                jwtToken = tokens.accessToken;
+
+                // 将刷新令牌存储到 Redis
+                const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+                await this.redis.set(
+                    `refresh_token:${userId}`,
+                    tokens.refreshToken,
+                    refreshTokenExpire
+                );
+
+                // 将访问令牌存储到 Redis（用于房间连接验证）
+                const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
+                await this.redis.set(
+                    `access_token:${userId}`,
+                    tokens.accessToken,
+                    accessTokenExpire
+                );
+            }
+
             return {
                 error: response.data.error,
                 openid: response.data.openid,
@@ -183,7 +249,8 @@ export class AccessTokenAndLoginService {
                 unionid: response.data.unionid,
                 errcode: response.data.errcode,
                 errmsg: response.data.errmsg,
-                message: response.data.message
+                message: response.data.message,
+                token: jwtToken
             };
         } catch (error: any) {
             throw new Error(`获取抖音用户信息异常: ${error.message || '未知错误'}`);
@@ -217,12 +284,46 @@ export class AccessTokenAndLoginService {
                 throw new Error(`获取微信用户信息失败: ${response.data.errmsg || '未知错误'} (errcode: ${response.data.errcode})`);
             }
 
+            // 使用 openid 或 unionid 作为用户标识
+            const userId = response.data.openid || response.data.unionid || '';
+            
+            // 生成 JWT token
+            let jwtToken: string | undefined;
+            if (userId) {
+                const tokens = JWTUtil.generateTokenPair({
+                    userId: userId,
+                    username: userId, // 使用 openid 作为 username
+                    openid: response.data.openid,
+                    unionid: response.data.unionid,
+                    platform: 'weixin'
+                });
+
+                jwtToken = tokens.accessToken;
+
+                // 将刷新令牌存储到 Redis
+                const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+                await this.redis.set(
+                    `refresh_token:${userId}`,
+                    tokens.refreshToken,
+                    refreshTokenExpire
+                );
+
+                // 将访问令牌存储到 Redis（用于房间连接验证）
+                const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
+                await this.redis.set(
+                    `access_token:${userId}`,
+                    tokens.accessToken,
+                    accessTokenExpire
+                );
+            }
+
             return {
                 openid: response.data.openid,
                 session_key: response.data.session_key,
                 unionid: response.data.unionid,
                 errcode: response.data.errcode,
-                errmsg: response.data.errmsg
+                errmsg: response.data.errmsg,
+                token: jwtToken
             };
         } catch (error: any) {
             throw new Error(`获取微信用户信息异常: ${error.message || '未知错误'}`);
