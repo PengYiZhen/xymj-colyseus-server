@@ -10,15 +10,17 @@
 import { AuthController } from '../AuthController';
 import { HealthController } from '../HealthController';
 import { HelloWorldController } from '../HelloWorldController';
+import { LoginController } from '../LoginController';
 
 // 导出所有控制器的数组（用于 routing-controllers）
 const controllers = [
   AuthController,
   HealthController,
   HelloWorldController,
+  LoginController,
 ];
 
 export default controllers;
 
 // 单独导出每个控制器（可选）
-export { AuthController, HealthController, HelloWorldController };
+export { AuthController, HealthController, HelloWorldController, LoginController };
