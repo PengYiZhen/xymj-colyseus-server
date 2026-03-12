@@ -46,8 +46,8 @@ export class LoginController {
     // 获取抖音登录用户信息
     // 数据库逻辑自己写
     // 如果想post方法就将req.query 改为 req.body
-    const accessToken = await this.accessTokenAndLoginService.getDouYinLoginUserInfoOpenid(req.query.code as string, req.query.anonymous_code as string);
-    return ResponseUtil.success(res, accessToken, "操作成功！");
+    const douyinLoginInfo = await this.accessTokenAndLoginService.getDouYinLoginUserInfoOpenid(req.query.code as string, req.query.anonymous_code as string);
+    return ResponseUtil.success(res, douyinLoginInfo, "操作成功！");
   }
   /**
    * @微信
@@ -76,7 +76,7 @@ export class LoginController {
   })
   async weixinLogin(@Req() req: Request, @Res() res: Response): Promise<Response> {
 
-    const accessToken = await this.accessTokenAndLoginService.getWeixinLoginUserInfoOpenid(req.query.jsCode as string);
-    return ResponseUtil.success(res, accessToken, "操作成功！");
+    const weixinLoginInfo = await this.accessTokenAndLoginService.getWeixinLoginUserInfoOpenid(req.query.jsCode as string);
+    return ResponseUtil.success(res, weixinLoginInfo, "操作成功！");
   }
 }
