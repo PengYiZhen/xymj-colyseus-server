@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户并发压力测试 - Colyseus</title>
+  <script src="https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+      margin: 0;
+    }
+    .container { max-width: 980px; margin: 0 auto; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    h1 { color: #fff; font-size: 1.5rem; margin: 0 0 8px; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .subtitle { color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 20px; }
+    label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 13px;
+    }
+    textarea { font-family: ui-monospace, monospace; min-height: 64px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+    .btn {
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #0d9488; color: #fff; }
+    .btn-accent { background: #7c3aed; color: #fff; }
+    .btn-warn { background: #f59e0b; color: #fff; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .stat {
+      background: #f0fdfa;
+      border: 1px solid #99f6e4;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat b { display: block; font-size: 1.35rem; color: #0f766e; }
+    .stat span { font-size: 11px; color: #64748b; }
+    .stat.server { background: #eef2ff; border-color: #a5b4fc; }
+    .stat.server b { color: #4338ca; }
+    .log {
+      height: 200px;
+      overflow: auto;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: ui-monospace, monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .hint { font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 8px; }
+    .warn-box {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #92400e;
+      margin-bottom: 12px;
+    }
+    .score-box {
+      background: linear-gradient(135deg, #faf5ff 0%, #ecfeff 100%);
+      border: 1px solid #c4b5fd;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    .score-box h4 { margin: 0 0 8px; color: #5b21b6; }
+    .score-main { font-size: 2rem; font-weight: 800; color: #6d28d9; }
+    .score-detail { font-size: 12px; color: #475569; margin-top: 8px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>用户并发压力测试</h1>
+    <p class="subtitle">默认房间 <code>loadtest_room</code> 无需 JWT；模拟递增 userId，按毫秒间隔发送随机数，观察服务端在线人数与消息回执。</p>
+
+    <div class="card">
+      <div class="warn-box">
+        <strong>浏览器 WebSocket 数量有上限</strong>（通常数百级）。更大并发请用终端：
+        <code>npx tsx loadtest/concurrent-join.ts --room loadtest_room --num 2000 --delay 10 --sendInterval 100</code>
+        （无需 <code>--token</code>）
+      </div>
+
+      <h3 style="margin-top:0;color:#0f766e;">参数</h3>
+      <div class="grid">
+        <div>
+          <label>服务器地址</label>
+          <input id="serverUrl" value="http://localhost:2567" />
+        </div>
+        <div>
+          <label>房间名</label>
+          <select id="roomName"></select>
+        </div>
+        <div>
+          <label>目标模拟用户数（本页发起的连接数）</label>
+          <input id="numClients" type="number" min="1" max="10000" value="30" />
+        </div>
+        <div>
+          <label>用户连接间隔（毫秒）</label>
+          <input id="delayMs" type="number" min="0" value="40" />
+        </div>
+        <div>
+          <label>随机数发送间隔（毫秒，0=连接后不发送）</label>
+          <input id="sendIntervalMs" type="number" min="0" value="200" />
+        </div>
+        <div>
+          <label>用户 ID 前缀（自动拼接序号与时间戳）</label>
+          <input id="userIdPrefix" value="lt_u" />
+        </div>
+      </div>
+      <div id="jwtRow" style="margin-top:12px;display:none;">
+        <label>JWT（仅聊天房需要）</label>
+        <input id="token" placeholder="粘贴 token" />
+      </div>
+      <div style="margin-top:12px;display:none;" id="joinExtraRow">
+        <label>附加 join options（JSON，合并进 options）</label>
+        <textarea id="joinOptionsJson" placeholder='{"guildId":"1001"}'></textarea>
+      </div>
+      <p class="hint">
+        压测房上限：<strong>LOADTEST_ROOM_MAX_CLIENTS</strong>；生产可设 <strong>LOADTEST_ROOM_ENABLED=false</strong> 关闭房间。
+        服务端在线人数来自房间状态 <code>connectedCount</code>（与 Colyseus Monitor 一致趋势）。
+      </p>
+      <div class="row">
+        <button class="btn btn-accent" id="btnStress" onclick="startUserStressTest()">用户压力测试</button>
+        <button class="btn btn-warn" id="btnAbort" onclick="abortRamp()" disabled>停止继续连接</button>
+        <button class="btn btn-primary" id="btnScore" onclick="stopAndScore()" disabled>结束并评分</button>
+        <button class="btn btn-danger" id="btnDisconnect" onclick="disconnectAll()" disabled>断开全部</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;color:#0f766e;">实时统计</h3>
+      <div class="stats">
+        <div class="stat"><b id="stTarget">0</b><span>目标用户数</span></div>
+        <div class="stat"><b id="stConnected">0</b><span>本页已连接</span></div>
+        <div class="stat server"><b id="stServerCount">0</b><span>服务端在线(状态)</span></div>
+        <div class="stat"><b id="stPeakServer">0</b><span>服务端在线峰值</span></div>
+        <div class="stat"><b id="stFailed">0</b><span>连接失败</span></div>
+        <div class="stat"><b id="stPending">0</b><span>连接进行中</span></div>
+        <div class="stat"><b id="stSent">0</b><span>已发 load 次数</span></div>
+        <div class="stat"><b id="stAcked">0</b><span>收到 loadAck</span></div>
+        <div class="stat"><b id="stDrop">0</b><span>运行中掉线</span></div>
+        <div class="stat"><b id="stElapsed">0s</b><span>本轮已运行</span></div>
+      </div>
+      <div class="score-box" id="scorePanel" style="display:none;">
+        <h4>评分（本轮）</h4>
+        <div class="score-main" id="scoreValue">—</div>
+        <div class="score-detail" id="scoreDetail"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;color:#0f766e;">日志</h3>
+      <div class="log" id="logBox"></div>
+    </div>
+  </div>
+
+  <script>
+    var ROOMS = [
+      { value: "loadtest_room", label: "loadtest_room（压测·无 JWT）", loadtest: true },
+      { value: "chat_world_room", label: "世界 chat_world_room", loadtest: false },
+      { value: "chat_guild_room", label: "工会 chat_guild_room", loadtest: false },
+      { value: "chat_nearby_room", label: "附近 chat_nearby_room", loadtest: false },
+      { value: "chat_team_room", label: "队伍 chat_team_room", loadtest: false },
+      { value: "my_room", label: "my_room（需 JWT）", loadtest: false },
+    ];
+
+    var slots = [];
+    var abortedRamp = false;
+    var rampRunning = false;
+    var stressActive = false;
+    var runId = 0;
+    var sendTimers = [];
+    var pendingAcks = {};
+    var nextClientSeq = 1;
+
+    var metrics = {
+      target: 0,
+      connected: 0,
+      failed: 0,
+      pending: 0,
+      serverCount: 0,
+      peakServer: 0,
+      sent: 0,
+      acked: 0,
+      drops: 0,
+      tStart: 0,
+      joinTimes: [],
+    };
+
+    var statTimer = null;
+    var stateBoundRoom = null;
+
+    function log(msg) {
+      var el = document.getElementById("logBox");
+      var t = new Date().toLocaleTimeString();
+      el.textContent = "[" + t + "] " + msg + "\n" + el.textContent;
+    }
+
+    function isLoadtestRoom() {
+      return document.getElementById("roomName").value === "loadtest_room";
+    }
+
+    function toggleRoomDeps() {
+      var lt = isLoadtestRoom();
+      document.getElementById("jwtRow").style.display = lt ? "none" : "block";
+      document.getElementById("joinExtraRow").style.display = lt ? "none" : "block";
+    }
+
+    function syncServerFromState(room) {
+      try {
+        var st = room.state;
+        if (!st) return;
+        var n = typeof st.connectedCount === "number" ? st.connectedCount : 0;
+        metrics.serverCount = n;
+        if (n > metrics.peakServer) metrics.peakServer = n;
+      } catch (e) {}
+    }
+
+    function bindRoomState(room) {
+      if (stateBoundRoom) return;
+      stateBoundRoom = room;
+      room.onStateChange(function () {
+        syncServerFromState(room);
+      });
+      syncServerFromState(room);
+    }
+
+    function uiStats() {
+      document.getElementById("stTarget").textContent = String(metrics.target);
+      document.getElementById("stConnected").textContent = String(metrics.connected);
+      document.getElementById("stServerCount").textContent = String(metrics.serverCount);
+      document.getElementById("stPeakServer").textContent = String(metrics.peakServer);
+      document.getElementById("stFailed").textContent = String(metrics.failed);
+      document.getElementById("stPending").textContent = String(metrics.pending);
+      document.getElementById("stSent").textContent = String(metrics.sent);
+      document.getElementById("stAcked").textContent = String(metrics.acked);
+      document.getElementById("stDrop").textContent = String(metrics.drops);
+      var elapsed = metrics.tStart ? (Date.now() - metrics.tStart) / 1000 : 0;
+      document.getElementById("stElapsed").textContent = elapsed.toFixed(1) + "s";
+    }
+
+    function clearSendTimers() {
+      sendTimers.forEach(function (id) { clearInterval(id); });
+      sendTimers = [];
+    }
+
+    function parseJoinOptionsBase() {
+      var base = {};
+      var raw = document.getElementById("joinOptionsJson").value.trim();
+      if (raw) {
+        try {
+          var extra = JSON.parse(raw);
+          if (extra && typeof extra === "object") Object.assign(base, extra);
+        } catch (e) {
+          log("join options JSON 解析失败: " + e.message);
+        }
+      }
+      var tok = document.getElementById("token").value.trim();
+      if (tok) base.token = tok;
+      return base;
+    }
+
+    function buildJoinOptions(index) {
+      var base = parseJoinOptionsBase();
+      var prefix = document.getElementById("userIdPrefix").value.trim() || "lt_u";
+      base.userId = prefix + "_" + runId + "_" + index;
+      return base;
+    }
+
+    function initRoomSelect() {
+      var sel = document.getElementById("roomName");
+      ROOMS.forEach(function (r) {
+        var o = document.createElement("option");
+        o.value = r.value;
+        o.textContent = r.label;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", toggleRoomDeps);
+      toggleRoomDeps();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      initRoomSelect();
+    });
+
+    function armLoadSender(room) {
+      var interval = parseInt(document.getElementById("sendIntervalMs").value, 10);
+      if (!interval || interval < 1) return;
+
+      var tid = setInterval(function () {
+        if (!stressActive) return;
+        var seq = nextClientSeq++;
+        try {
+          pendingAcks[seq] = Date.now();
+          room.send("load", { n: Math.random(), clientSeq: seq });
+          metrics.sent++;
+        } catch (e) {
+          delete pendingAcks[seq];
+        }
+        uiStats();
+      }, interval);
+      sendTimers.push(tid);
+    }
+
+    function armLoadAck(room) {
+      room.onMessage("loadAck", function (msg) {
+        var cs = msg && msg.clientSeq;
+        if (pendingAcks[cs] !== undefined) delete pendingAcks[cs];
+        metrics.acked++;
+        uiStats();
+      });
+    }
+
+    async function startUserStressTest() {
+      if (typeof Colyseus === "undefined") {
+        alert("未加载 colyseus.js");
+        return;
+      }
+      var url = document.getElementById("serverUrl").value.trim();
+      var roomName = document.getElementById("roomName").value;
+      var num = parseInt(document.getElementById("numClients").value, 10) || 1;
+      var delayMs = parseInt(document.getElementById("delayMs").value, 10) || 0;
+
+      if (!isLoadtestRoom()) {
+        var optsCheck = parseJoinOptionsBase();
+        if (!optsCheck.token && roomName.indexOf("chat_") === 0) {
+          alert("聊天房需要 JWT，请填写 token 或改用 loadtest_room");
+          return;
+        }
+        if (!optsCheck.token && roomName === "my_room") {
+          alert("my_room 需要 JWT");
+          return;
+        }
+      }
+
+      await disconnectAll();
+      abortedRamp = false;
+      rampRunning = true;
+      stressActive = true;
+      runId = Date.now();
+      stateBoundRoom = null;
+      nextClientSeq = 1;
+      pendingAcks = {};
+      clearSendTimers();
+
+      metrics = {
+        target: num,
+        connected: 0,
+        failed: 0,
+        pending: 0,
+        serverCount: 0,
+        peakServer: 0,
+        sent: 0,
+        acked: 0,
+        drops: 0,
+        tStart: Date.now(),
+        joinTimes: [],
+      };
+
+      document.getElementById("scorePanel").style.display = "none";
+      document.getElementById("btnStress").disabled = true;
+      document.getElementById("btnAbort").disabled = false;
+      document.getElementById("btnScore").disabled = false;
+      document.getElementById("btnDisconnect").disabled = false;
+
+      if (statTimer) clearInterval(statTimer);
+      statTimer = setInterval(function () {
+        if (slots.length && stateBoundRoom) syncServerFromState(stateBoundRoom);
+        uiStats();
+      }, 400);
+      uiStats();
+
+      log("用户压力测试开始 runId=" + runId + " 目标=" + num + " 房间=" + roomName);
+
+      for (var i = 0; i < num; i++) {
+        if (abortedRamp) {
+          log("已停止继续发起新连接");
+          break;
+        }
+        metrics.pending++;
+        uiStats();
+        var t0 = performance.now();
+        try {
+          var client = new Colyseus.Client(url);
+          var opts = isLoadtestRoom() ? { userId: buildJoinOptions(i).userId } : buildJoinOptions(i);
+          var room = await client.joinOrCreate(roomName, opts);
+          metrics.joinTimes.push(performance.now() - t0);
+          metrics.connected++;
+          bindRoomState(room);
+          armLoadAck(room);
+          armLoadSender(room);
+          slots.push({
+            client: client,
+            room: room,
+            userId: opts.userId,
+          });
+          room.onLeave(function (code) {
+            if (!stressActive) return;
+            metrics.drops++;
+            metrics.connected = Math.max(0, metrics.connected - 1);
+            log("掉线 code=" + code + " 剩余本页连接≈" + metrics.connected);
+            uiStats();
+          });
+        } catch (e) {
+          metrics.failed++;
+          if (metrics.failed <= 8 || metrics.failed % 20 === 0) {
+            log("连接失败 #" + metrics.failed + ": " + (e.message || e));
+          }
+        } finally {
+          metrics.pending--;
+          uiStats();
+        }
+        if (delayMs > 0) await new Promise(function (r) { setTimeout(r, delayMs); });
+      }
+
+      rampRunning = false;
+      document.getElementById("btnStress").disabled = false;
+      document.getElementById("btnAbort").disabled = true;
+      log("加压连接阶段结束：成功=" + metrics.connected + " 失败=" + metrics.failed + "（随机数仍在发送直至「结束并评分」或掉线）");
+      uiStats();
+    }
+
+    function abortRamp() {
+      abortedRamp = true;
+      document.getElementById("btnAbort").disabled = true;
+      log("已请求停止继续连接");
+    }
+
+    function computeScore() {
+      var target = Math.max(1, metrics.target);
+      var okConn = metrics.connected + metrics.failed > 0
+        ? metrics.connected / (metrics.connected + metrics.failed)
+        : 0;
+      var ackRate = metrics.sent > 0 ? Math.min(1, metrics.acked / metrics.sent) : 1;
+      var peakRatio = Math.min(1, metrics.peakServer / target);
+      var dropPenalty = metrics.connected > 0
+        ? Math.max(0, 1 - metrics.drops / (metrics.connected + metrics.drops + 0.001))
+        : (metrics.drops > 0 ? 0.5 : 1);
+
+      var partA = okConn * 38;
+      var partB = ackRate * 32;
+      var partC = peakRatio * 20;
+      var partD = dropPenalty * 10;
+      var total = Math.round(Math.min(100, partA + partB + partC + partD));
+
+      return {
+        total: total,
+        okConn: okConn,
+        ackRate: ackRate,
+        peakRatio: peakRatio,
+        dropPenalty: dropPenalty,
+        parts: { a: partA, b: partB, c: partC, d: partD },
+      };
+    }
+
+    async function stopAndScore() {
+      stressActive = false;
+      clearSendTimers();
+      var sc = computeScore();
+      document.getElementById("scorePanel").style.display = "block";
+      document.getElementById("scoreValue").textContent = sc.total + " / 100";
+      document.getElementById("scoreDetail").innerHTML =
+        "连接成功率加权 " + sc.parts.a.toFixed(1) + " / 38（成功 " + metrics.connected + " / 尝试 " + (metrics.connected + metrics.failed) + "）<br/>" +
+        "loadAck 回执 " + sc.parts.b.toFixed(1) + " / 32（" + metrics.acked + " / " + metrics.sent + "）<br/>" +
+        "服务端峰值/目标 " + sc.parts.c.toFixed(1) + " / 20（峰值 " + metrics.peakServer + " / 目标 " + metrics.target + "）<br/>" +
+        "掉线惩罚后稳定性 " + sc.parts.d.toFixed(1) + " / 10（运行中掉线 " + metrics.drops + "）<br/>" +
+        "<em>若未发 load（间隔为 0），回执项按满分估算；评分仅供相对对比。</em>";
+      log("结束并评分: " + sc.total + " 分");
+      await disconnectAll();
+    }
+
+    async function disconnectAll() {
+      abortedRamp = true;
+      stressActive = false;
+      rampRunning = false;
+      clearSendTimers();
+      stateBoundRoom = null;
+      for (var i = 0; i < slots.length; i++) {
+        try {
+          if (slots[i].room) await slots[i].room.leave();
+        } catch (e) {}
+      }
+      slots = [];
+      metrics.connected = 0;
+      metrics.pending = 0;
+      metrics.serverCount = 0;
+      uiStats();
+      log("已断开全部本页连接");
+      document.getElementById("btnDisconnect").disabled = true;
+      document.getElementById("btnAbort").disabled = true;
+      document.getElementById("btnScore").disabled = true;
+      document.getElementById("btnStress").disabled = false;
+    }
+  </script>
+</body>
+</html>

@@ -62,7 +62,16 @@ export interface AppConfig {
   
   // Colyseus 配置
   colyseus: {
+    /** 预留：全局限流等场景可用；单房间上限请用 chatRoomMaxClients */
     maxClients: number;
+    /** 世界/工会/附近/队伍等聊天房间单房最大连接数（Colyseus Room.maxClients） */
+    chatRoomMaxClients: number;
+    /** 世界频道跨实例同步：Redis Pub/Sub 频道名 */
+    chatWorldRedisChannel: string;
+    /** 无 JWT 压测房（loadtest_room）单房最大连接数 */
+    loadTestRoomMaxClients: number;
+    /** 设为 false 时拒绝创建压测房（如生产环境） */
+    loadTestRoomEnabled: boolean;
     pingInterval: number;
     pingMaxRetries: number;
   };
@@ -151,6 +160,23 @@ const config: AppConfig = {
   // Colyseus 游戏服务器配置
   colyseus: {
     maxClients: parseInt(process.env.COLYSEUS_MAX_CLIENTS || '100', 10),
+    chatRoomMaxClients: Math.min(
+      65535,
+      Math.max(
+        1,
+        parseInt(process.env.CHAT_ROOM_MAX_CLIENTS || '5000', 10)
+      )
+    ),
+    chatWorldRedisChannel:
+      process.env.CHAT_WORLD_REDIS_CHANNEL || 'colyseus:chat:world',
+    loadTestRoomMaxClients: Math.min(
+      65535,
+      Math.max(
+        1,
+        parseInt(process.env.LOADTEST_ROOM_MAX_CLIENTS || '10000', 10)
+      )
+    ),
+    loadTestRoomEnabled: process.env.LOADTEST_ROOM_ENABLED !== 'false',
     pingInterval: parseInt(process.env.COLYSEUS_PING_INTERVAL || '3000', 10),
     pingMaxRetries: parseInt(process.env.COLYSEUS_PING_MAX_RETRIES || '3', 10),
   },

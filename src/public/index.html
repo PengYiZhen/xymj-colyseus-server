@@ -528,6 +528,44 @@
         </div>
 
         <div class="card">
+            <h2>💬 聊天演示</h2>
+            <div class="api-endpoint" style="background: #f0f4ff; border-left-color: #667eea;">
+                <div>
+                    <span class="method get" style="background: #667eea;">DEMO</span>
+                    <span class="endpoint-path">ChatDemo.html</span>
+                    <span class="status-badge status-info">交互式演示</span>
+                </div>
+                <div class="description">
+                    打开世界/工会/附近/队伍聊天房间的交互式演示程序
+                </div>
+                <div style="margin-top: 15px;">
+                    <a href="ChatDemo.html" class="swagger-link" style="color: #667eea; border-bottom-color: #667eea;">
+                        💬 打开聊天演示程序 →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📈 并发压测</h2>
+            <div class="api-endpoint" style="background: #ecfdf5; border-left-color: #0d9488;">
+                <div>
+                    <span class="method get" style="background: #0d9488;">TEST</span>
+                    <span class="endpoint-path">LoadTestConcurrent.html</span>
+                    <span class="status-badge status-info">连接数 / 性能</span>
+                </div>
+                <div class="description">
+                    <code>loadtest_room</code> 无需 JWT：模拟用户 ID、按毫秒间隔发随机数、观察服务端在线人数并可评分；大并发用 <code>npm run loadtest:concurrent</code>
+                </div>
+                <div style="margin-top: 15px;">
+                    <a href="LoadTestConcurrent.html" class="swagger-link" style="color: #0d9488; border-bottom-color: #0d9488;">
+                        📈 打开并发压测页面 →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>⚙️ 帧同步功能</h2>
             <div class="description" style="margin-bottom: 20px;">
                 帧同步（Frame Synchronization）是一种多人游戏同步机制，确保所有客户端在相同的帧上执行相同的逻辑，从而保证游戏状态的一致性。

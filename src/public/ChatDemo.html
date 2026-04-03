@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>聊天演示 - 小游码匠</title>
+
+  <!-- Colyseus 客户端库 -->
+  <script src="https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 18px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+    }
+
+    .card h2 { margin: 0 0 14px; color: #667eea; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+
+    label { display: block; font-size: 13px; margin-bottom: 6px; color: #555; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      outline: none;
+    }
+
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    .btn {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 0;
+      cursor: pointer;
+      background: #667eea;
+      color: white;
+      font-weight: 600;
+    }
+    .btn.danger { background: #ef4444; }
+    .btn.gray { background: #64748b; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .chat-log {
+      height: 360px;
+      overflow: auto;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fafafa;
+    }
+
+    .log-entry { padding: 8px 10px; border-bottom: 1px dashed #eaeaea; font-size: 13px; line-height: 1.5; }
+    .log-entry:last-child { border-bottom: 0; }
+    .log-time { color: #64748b; margin-right: 4px; }
+
+    /* 聊天类型：加粗 + 各频道颜色 */
+    .chat-channel {
+      font-weight: 700;
+      margin: 0 6px 0 2px;
+    }
+    .chat-channel--world { color: #7c3aed; }
+    .chat-channel--guild { color: #ea580c; }
+    .chat-channel--nearby { color: #0d9488; }
+    .chat-channel--team { color: #db2777; }
+    .chat-channel--default { color: #475569; }
+
+    /* 用户名：自己绿色，他人蓝色 */
+    .chat-user { font-weight: 600; }
+    .chat-user--self { color: #16a34a; }
+    .chat-user--other { color: #2563eb; }
+    .muted { opacity: 0.8; }
+    .title-row { display:flex; justify-content:space-between; align-items:center; gap: 12px; }
+    .badge {
+      display:inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(102,126,234,0.12);
+      color: #4f46e5;
+      font-size: 12px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="title-row">
+        <h2>聊天演示</h2>
+        <span class="badge">世界/工会/附近/队伍</span>
+      </div>
+      <p class="muted" style="margin-top:0;">
+        需要后端能验证 JWT（RequireAuth）。通常把你从登录接口拿到的 <code>token</code> 填到下面。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>连接信息</h2>
+      <div class="grid">
+        <div>
+          <label>服务器地址</label>
+          <input id="serverUrl" value="http://localhost:2567" />
+        </div>
+
+        <div>
+          <label>房间类型（值与服务端 ChatRoomName 枚举一致）</label>
+          <select id="roomType"></select>
+        </div>
+
+        <div>
+          <label>JWT token（必填）</label>
+          <input id="token" placeholder="粘贴 token" />
+        </div>
+
+        <div>
+          <label>guildId（工会聊天）</label>
+          <input id="guildId" placeholder="例如 1001" />
+        </div>
+
+        <div>
+          <label>teamId（队伍聊天）</label>
+          <input id="teamId" placeholder="例如 2001" />
+        </div>
+
+        <div>
+          <label>x（附近聊天/坐标）</label>
+          <input id="x" value="100" />
+        </div>
+
+        <div>
+          <label>y（附近聊天/坐标）</label>
+          <input id="y" value="100" />
+        </div>
+
+        <div>
+          <label>nearbyRadius（附近半径）</label>
+          <input id="nearbyRadius" value="120" />
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;" class="row">
+        <button class="btn" id="connectBtn" onclick="connectRoom()">Join/Connect</button>
+        <button class="btn danger" id="disconnectBtn" onclick="disconnectRoom()" disabled>Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>聊天</h2>
+      <div class="row" style="margin-bottom: 12px;">
+        <div style="flex:1; min-width: 260px;">
+          <label style="margin-bottom:6px;">消息内容</label>
+          <input id="chatText" placeholder="输入聊天内容..." />
+        </div>
+        <button class="btn gray" onclick="sendChat()">发送 chat</button>
+        <button class="btn gray" onclick="sendUpdatePosition()">updatePosition</button>
+      </div>
+
+      <div class="row" style="margin-bottom: 10px;">
+        <div>
+          <div><b>状态：</b><span id="status">未连接</span></div>
+          <div class="muted"><b>房间：</b><span id="roomId">-</span></div>
+          <div class="muted"><b>会话：</b><span id="sessionId">-</span></div>
+        </div>
+      </div>
+
+      <div class="chat-log" id="logContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    let room = null;
+    let isConnected = false;
+
+    /** JWT 缓存在 sessionStorage，刷新/关闭标签页前同一会话内可恢复 */
+    const SESSION_JWT_KEY = "chatDemo_jwt_token";
+
+    /**
+     * 与服务端 src/rooms/chat/ChatRoomName.ts 枚举值一致（字符串相等）。
+     * 业务侧可用中文键作实参：joinOrCreate(聊天房间名.世界, options)
+     */
+    const 聊天房间名 = {
+      世界: "chat_world_room",
+      工会: "chat_guild_room",
+      附近: "chat_nearby_room",
+      队伍: "chat_team_room",
+    };
+    const 聊天房间显示名 = {
+      世界: "世界聊天",
+      工会: "工会聊天",
+      附近: "附近聊天",
+      队伍: "队伍聊天",
+    };
+
+    function persistJwtToken(value) {
+      try {
+        const v = String(value || "").trim();
+        if (v) {
+          sessionStorage.setItem(SESSION_JWT_KEY, v);
+        } else {
+          sessionStorage.removeItem(SESSION_JWT_KEY);
+        }
+      } catch (e) {
+        /* 隐私模式或配额等 */
+      }
+    }
+
+    function restoreJwtToken() {
+      try {
+        const v = sessionStorage.getItem(SESSION_JWT_KEY);
+        const el = document.getElementById("token");
+        if (el && v) el.value = v;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    function escapeHtml(s) {
+      if (s == null || s === undefined) return "";
+      const div = document.createElement("div");
+      div.textContent = String(s);
+      return div.innerHTML;
+    }
+
+    function channelClass(channel) {
+      const c = String(channel || "").toLowerCase();
+      if (c === "world") return "chat-channel--world";
+      if (c === "guild") return "chat-channel--guild";
+      if (c === "nearby") return "chat-channel--nearby";
+      if (c === "team") return "chat-channel--team";
+      return "chat-channel--default";
+    }
+
+    /**
+     * 频道文案：世界 / 工会+ID / 队伍+ID / 附近
+     */
+    function channelDisplayLabel(message) {
+      var ch = String(message.channel || "").toLowerCase();
+      if (ch === "world") return "世界";
+      if (ch === "guild") {
+        var gid = String(message.guildId || "").trim();
+        return gid ? "工会" + gid : "工会";
+      }
+      if (ch === "team") {
+        var tid = String(message.teamId || "").trim();
+        return tid ? "队伍" + tid : "队伍";
+      }
+      if (ch === "nearby") return "附近";
+      return String(message.channel || "聊天");
+    }
+
+    function addLog(message, type = "info") {
+      const logContainer = document.getElementById("logContainer");
+      const timestamp = new Date().toLocaleTimeString();
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      div.textContent = `[${timestamp}] ${message}`;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    /**
+     * 聊天消息：类型加粗分色，自己绿色 / 他人蓝色
+     */
+    function addChatMessage(message) {
+      const logContainer = document.getElementById("logContainer");
+      const timestamp = new Date().toLocaleTimeString();
+      const ch = message.channel || "chat";
+      var chLabel = escapeHtml(channelDisplayLabel(message));
+      const senderName =
+        message.sender?.username ||
+        message.sender?.userId ||
+        message.sender?.sessionId ||
+        "unknown";
+      const senderSessionId = message.sender?.sessionId || "";
+      const isSelf = room && senderSessionId && senderSessionId === room.sessionId;
+      const userClass = isSelf ? "chat-user--self" : "chat-user--other";
+      const userDisplay = isSelf
+        ? `(自己说)${escapeHtml(senderName)}`
+        : escapeHtml(senderName);
+      const body = escapeHtml(message.message);
+
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      div.innerHTML =
+        `<span class="log-time">[${escapeHtml(timestamp)}]</span>` +
+        `<span class="chat-channel ${channelClass(ch)}">[${chLabel}]</span>` +
+        `<span class="chat-user ${userClass}">${userDisplay}</span>` +
+        `: ${body}`;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function setStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
+
+    async function connectRoom() {
+      const serverUrl = document.getElementById("serverUrl").value;
+      const roomName = document.getElementById("roomType").value;
+      const token = document.getElementById("token").value;
+
+      const guildId = document.getElementById("guildId").value;
+      const teamId = document.getElementById("teamId").value;
+      const x = Number(document.getElementById("x").value);
+      const y = Number(document.getElementById("y").value);
+      const nearbyRadius = Number(document.getElementById("nearbyRadius").value);
+
+      if (!token) {
+        alert("请先填入 JWT token");
+        return;
+      }
+      persistJwtToken(token);
+
+      try {
+        setStatus("连接中...");
+        addLog(`正在连接: ${serverUrl} / ${roomName}`, "info");
+
+        const client = new Colyseus.Client(serverUrl);
+        const options = {
+          token: token,
+          guildId: guildId,
+          teamId: teamId,
+          x: x,
+          y: y,
+          nearbyRadius: nearbyRadius,
+        };
+
+        room = await client.joinOrCreate(roomName, options);
+        isConnected = true;
+
+        document.getElementById("disconnectBtn").disabled = false;
+        document.getElementById("connectBtn").disabled = true;
+
+        document.getElementById("roomId").textContent = room.roomId || "-";
+        document.getElementById("sessionId").textContent = room.sessionId || "-";
+
+        room.onLeave(() => {
+          isConnected = false;
+          room = null;
+          setStatus("已断开");
+          document.getElementById("disconnectBtn").disabled = true;
+          document.getElementById("connectBtn").disabled = false;
+          addLog("已离开房间");
+        });
+
+        room.onMessage("chat", (message) => {
+          addChatMessage(message);
+        });
+
+        room.onError((code, message) => {
+          addLog(`房间错误 [${code}]: ${message}`, "error");
+        });
+
+        setStatus("已连接");
+        addLog("连接成功");
+      } catch (e) {
+        setStatus("连接失败");
+        addLog(`连接失败: ${e.message || e}`, "error");
+        console.error(e);
+      }
+    }
+
+    async function disconnectRoom() {
+      if (!room) return;
+      try {
+        await room.leave();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    function sendChat() {
+      if (!room || !isConnected) return addLog("请先连接房间", "warning");
+      const text = document.getElementById("chatText").value;
+      if (!text || !String(text).trim()) return;
+      room.send("chat", { message: String(text) });
+      document.getElementById("chatText").value = "";
+    }
+
+    function sendUpdatePosition() {
+      if (!room || !isConnected) return;
+      const x = Number(document.getElementById("x").value);
+      const y = Number(document.getElementById("y").value);
+      room.send("updatePosition", { x: x, y: y });
+      addLog(`updatePosition -> x=${x}, y=${y}`);
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var roomSelect = document.getElementById("roomType");
+      if (roomSelect) {
+        Object.keys(聊天房间名).forEach(function (key) {
+          var opt = document.createElement("option");
+          opt.value = 聊天房间名[key];
+          opt.textContent = 聊天房间显示名[key] || key;
+          roomSelect.appendChild(opt);
+        });
+      }
+      restoreJwtToken();
+      var tokenEl = document.getElementById("token");
+      if (tokenEl) {
+        tokenEl.addEventListener("input", function () {
+          persistJwtToken(tokenEl.value);
+        });
+        tokenEl.addEventListener("change", function () {
+          persistJwtToken(tokenEl.value);
+        });
+        tokenEl.addEventListener("blur", function () {
+          persistJwtToken(tokenEl.value);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+

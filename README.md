@@ -13,6 +13,9 @@
 - 💾 **TypeORM** - 强大的 ORM，支持 MySQL/MariaDB
 - ⚡ **Redis 缓存** - 高性能缓存支持
 - 🎨 **帧同步** - 支持帧同步游戏房间
+- 📱 **微信 / 抖音小游戏** - Access Token（Redis 缓存）与 `code2Session` / `jscode2session` 登录信息接口
+- 💬 **频道聊天（Colyseus）** - 世界 / 工会 / 附近 / 队伍房间，世界频道支持 Redis Pub/Sub 跨实例同步
+- 📈 **并发压测** - `loadtest_room` 无 JWT 压测页与 Node 脚本，便于观察连接与消息吞吐
 - 📦 **TypeScript** - 完整的类型支持
 
 ![](./homepage.png)
@@ -29,12 +32,14 @@ src/
 ├── index.ts               # 应用入口
 ├── config/                # 配置文件
 │   ├── index.ts          # 主配置
+│   ├── minigame.ts       # 微信 / 抖音小游戏 AppID、Secret
 │   ├── swagger.ts        # Swagger 配置
 │   └── swagger-schemas.ts # Swagger Schema 定义
 ├── controllers/           # 控制器（自动加载）
 │   ├── autoLoad/         # 自动生成的控制器索引
 │   │   └── index.ts      # ⚠️ 自动生成，请勿手动修改
 │   ├── AuthController.ts  # 认证控制器
+│   ├── LoginController.ts # 微信 / 抖音小游戏 access_token 与登录
 │   ├── HealthController.ts # 健康检查控制器
 │   └── ...
 ├── services/              # 业务逻辑层
@@ -53,7 +58,9 @@ src/
 ├── rooms/                 # Colyseus 房间
 │   ├── MyRoom.ts         # 示例房间
 │   ├── GameRoom.ts       # 帧同步游戏房间
-│   └── schema/           # 房间状态 Schema
+│   ├── LoadTestRoom.ts   # 无 JWT 压测房间（loadtest_room）
+│   ├── chat/             # 聊天房间（世界/工会/附近/队伍）
+│   └── schema/           # 房间状态 Schema（含 chat/、LoadTestRoomState 等）
 ├── database/              # 数据库配置
 │   └── connection.ts     # 数据库连接
 ├── utils/                 # 工具函数
@@ -65,8 +72,12 @@ src/
 │   └── index.ts          # 路由前缀配置
 └── public/                # 静态文件
     ├── index.html
-    └── FrameSync.html
+    ├── FrameSync.html     # 帧同步演示
+    ├── ChatDemo.html      # 聊天频道演示（JWT + 房间选项）
+    └── LoadTestConcurrent.html  # 并发压测（默认 loadtest_room，无需 JWT）
 ```
+
+项目根目录另有 **`loadtest/`**：`concurrent-join.ts`（Node 并发压测）、`example.ts`（简单示例）。
 
 ## 🚀 快速开始
 
@@ -117,7 +128,18 @@ JWT_REFRESH_EXPIRES_IN=7d
 # Swagger 配置
 SWAGGER_ENABLED=true
 SWAGGER_PATH=/api-docs
+
+# 聊天房间单实例最大连接数（世界/工会/附近/队伍）
+CHAT_ROOM_MAX_CLIENTS=5000
+# 世界聊天跨实例同步（Redis Pub/Sub 频道名）
+CHAT_WORLD_REDIS_CHANNEL=colyseus:chat:world
+
+# 压测房 loadtest_room（生产可关闭）
+LOADTEST_ROOM_MAX_CLIENTS=10000
+LOADTEST_ROOM_ENABLED=true
 ```
+
+小游戏 **AppID / AppSecret** 在 `src/config/minigame.ts`（`DouYinConfig`、`WeiXinConfig`）中填写。
 
 ### 运行开发服务器
 
@@ -149,6 +171,42 @@ node dist/index.js
 ```
 http://localhost:2567/api-docs
 ```
+
+## 📱 微信与抖音小游戏登录
+
+HTTP API 前缀为 **`/api`**（见 `src/routes/index.ts`）。小游戏相关控制器：`LoginController`，标签 **「小游戏登录相关」**。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/minigame/douyin/access_token` | 获取抖音小游戏 **access_token**（带 Redis 缓存） |
+| GET | `/api/minigame/douyin/login` | 抖音登录：Query 传 `code`、`anonymous_code`，服务端请求字节 **jscode2session**，返回 openid / session_key 等 |
+| GET | `/api/minigame/weixin/access_token` | 获取微信小游戏 **access_token**（带 Redis 缓存） |
+| GET | `/api/minigame/weixin/login` | 微信登录：Query 传 **`jsCode`**（`wx.login` 拿到的 code），请求微信 **jscode2session** |
+
+实现细节见 `src/services/AccessTokenAndLoginService.ts`（抖音：`minigame.zijieapi.com`；微信：官方 `sns/jscode2session` 与 `cgi-bin/token`）。  
+拿到 openid 等信息后，业务可自行落库并与站内账号绑定；需要进 **带 `@RequireAuth()` 的 Colyseus 房间** 时，客户端仍应使用 **`/api/auth/login`** 等流程获取 **JWT**，在 `joinOrCreate` 的 options 里传 `token` 或 `accessToken`。
+
+## 💬 Colyseus 聊天频道
+
+在 `src/app.config.ts` 中已注册四个聊天房间（名称定义于 `src/rooms/chat/ChatRoomName.ts`）：
+
+| 房间名 | 频道 | 说明 |
+|--------|------|------|
+| `chat_world_room` | 世界 | 全服广播；多实例部署时通过 **Redis Pub/Sub**（`CHAT_WORLD_REDIS_CHANNEL`）同步消息 |
+| `chat_guild_room` | 工会 | 同 `guildId` 成员可见 |
+| `chat_nearby_room` | 附近 | 依赖坐标与 `nearbyRadius`，可发 **`updatePosition`** 更新位置 |
+| `chat_team_room` | 队伍 | 同 `teamId` 成员可见 |
+
+**认证**：`BaseChatRoom` 的 `onCreate` / `onJoin` 使用 **`@RequireAuth()`**，join 时需传有效 JWT（及业务需要的 `guildId` / `teamId` / 坐标等 options）。
+
+**客户端消息**：
+
+- **`chat`**：负载可为 `{ message: string }`（或兼容字段），服务端写入历史并按频道过滤后 **`chat`** 事件下发。
+- **`updatePosition`**：附近频道用，例如 `{ x, y }`。
+
+**演示页**：启动服务后打开 `http://localhost:2567/ChatDemo.html`（首页亦有入口）。
+
+**压测（无需 JWT）**：`loadtest_room` + `LoadTestConcurrent.html` 或 `npm run loadtest:concurrent`（详见页面说明与 `loadtest/concurrent-join.ts`）。
 
 ## 🎯 使用指南
 
@@ -400,6 +458,8 @@ npm run dev
 # 构建生产版本
 npm run build
 
+# Colyseus 并发压测（默认房间 loadtest_room，无需 token；大并发请用本脚本而非浏览器单页）
+npm run loadtest:concurrent -- --num 1000 --delay 10 --sendInterval 100
 ```
 
 ## 🛠️ 技术栈

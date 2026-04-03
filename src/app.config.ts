@@ -1,4 +1,5 @@
 import config from "@colyseus/tools";
+import { WebSocketTransport } from "@colyseus/ws-transport";
 import { monitor } from "@colyseus/monitor";
 import { playground } from "@colyseus/playground";
 import express from "express";
@@ -14,6 +15,12 @@ import { routingControllersToSpec } from "routing-controllers-openapi";
  */
 import { MyRoom } from "./rooms/MyRoom";
 import { GameRoom } from "./rooms/GameRoom";
+import { WorldChatRoom } from "./rooms/chat/WorldChatRoom";
+import { GuildChatRoom } from "./rooms/chat/GuildChatRoom";
+import { NearbyChatRoom } from "./rooms/chat/NearbyChatRoom";
+import { TeamChatRoom } from "./rooms/chat/TeamChatRoom";
+import { ChatRoomName } from "./rooms/chat/ChatRoomName";
+import { LoadTestRoom } from "./rooms/LoadTestRoom";
 
 /**
  * Import database and cache
@@ -38,6 +45,16 @@ import controllers from "./controllers/autoLoad/index";
 
 export default config({
 
+    /**
+     * WebSocket 传输层：把 .env 里的 COLYSEUS_PING_* 真正传给 ws（原先仅在 config 中定义未生效）
+     */
+    initializeTransport: (options: { server?: any; app?: any }) =>
+        new WebSocketTransport({
+            ...options,
+            pingInterval: appConfig.colyseus.pingInterval,
+            pingMaxRetries: appConfig.colyseus.pingMaxRetries,
+        }),
+
     initializeGameServer: (gameServer) => {
         /**
          * Define your room handlers:
@@ -51,6 +68,17 @@ export default config({
             fps: 20, // 帧率
             recordFrames: false, // 是否记录帧数据
         });
+
+        /**
+         * 聊天房间（世界/工会/附近/队伍）
+         */
+        gameServer.define(ChatRoomName.世界, WorldChatRoom);
+        gameServer.define(ChatRoomName.工会, GuildChatRoom);
+        gameServer.define(ChatRoomName.附近, NearbyChatRoom);
+        gameServer.define(ChatRoomName.队伍, TeamChatRoom);
+
+        /** 无 JWT 并发压测房（见 LoadTestConcurrent.html / loadtest/concurrent-join.ts） */
+        gameServer.define("loadtest_room", LoadTestRoom);
     },
 
     initializeExpress: (app) => {
