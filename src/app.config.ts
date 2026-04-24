@@ -21,6 +21,7 @@ import { NearbyChatRoom } from "./rooms/chat/NearbyChatRoom";
 import { TeamChatRoom } from "./rooms/chat/TeamChatRoom";
 import { ChatRoomName } from "./rooms/chat/ChatRoomName";
 import { LoadTestRoom } from "./rooms/LoadTestRoom";
+import { MatchmakerRoom } from "./rooms/MatchmakerRoom";
 
 /**
  * Import database and cache
@@ -68,6 +69,11 @@ export default config({
             fps: 20, // 帧率
             recordFrames: false, // 是否记录帧数据
         });
+
+        /**
+         * 匹配入口（主动匹配/被动开房）
+         */
+        gameServer.define("matchmaker_room", MatchmakerRoom);
 
         /**
          * 聊天房间（世界/工会/附近/队伍）

@@ -7,6 +7,7 @@ import { BaseEntity } from './BaseEntity';
 @Entity('users')
 @Index(['username'], { unique: true })
 @Index(['email'], { unique: true })
+@Index(['openid'], { unique: true })
 export class User extends BaseEntity {
   @Column({
     type: 'varchar',
@@ -45,6 +46,22 @@ export class User extends BaseEntity {
     comment: '头像URL',
   })
   avatar?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: '第三方 openid（例如微信）',
+  })
+  openid?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: '工会ID',
+  })
+  guildId?: string;
 
   @Column({
     type: 'tinyint',

@@ -68,6 +68,18 @@ export const swaggerSchemas: Record<string, any> = {
         nullable: true,
         example: 'https://example.com/avatar.jpg',
       },
+      openid: {
+        type: 'string',
+        nullable: true,
+        example: 'oWZ9m5XXXXXX',
+        description: '第三方 openid（例如微信/抖音）',
+      },
+      guildId: {
+        type: 'string',
+        nullable: true,
+        example: '10001',
+        description: '工会ID',
+      },
       status: {
         type: 'integer',
         example: 1,

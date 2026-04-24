@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>匹配赛演示 - 小游码匠</title>
+  <script src="https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #111827 0%, #4c1d95 55%, #2563eb 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #111827;
+      margin: 0;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .back-link {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      color: #fff;
+      text-decoration: none;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.14);
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+    .back-link:hover { background: rgba(255,255,255,0.22); }
+    .header {
+      text-align: center;
+      color: #fff;
+      padding: 18px 0 26px;
+    }
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 2.2rem;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    }
+    .header p { margin: 0; opacity: 0.92; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1000px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: rgba(255,255,255,0.96);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.45);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1.25rem;
+      color: #4f46e5;
+      padding-bottom: 10px;
+      border-bottom: 2px solid rgba(79,70,229,0.25);
+    }
+    label { display: block; font-size: 12px; color: #4b5563; margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 14px;
+      outline: none;
+      background: #fff;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    textarea { min-height: 78px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12.5px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row > * { flex: 1; min-width: 180px; }
+    .row.tight > * { min-width: 140px; }
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      background: #4f46e5;
+      color: #fff;
+      transition: transform 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+    }
+    .btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .btn.gray { background: #64748b; }
+    .btn.danger { background: #dc2626; }
+    .btn.success { background: #16a34a; }
+    .pill {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(79,70,229,0.10);
+      color: #4338ca;
+      font-weight: 800;
+      font-size: 12px;
+      border: 1px solid rgba(79,70,229,0.18);
+    }
+    .status {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .kv {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .kv b { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .kv span { display: block; font-weight: 800; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log {
+      height: 340px;
+      overflow: auto;
+      background: #0b1020;
+      color: #e5e7eb;
+      border-radius: 14px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+    code { background: rgba(79,70,229,0.08); padding: 2px 6px; border-radius: 8px; }
+    .hint { font-size: 12px; color: #6b7280; line-height: 1.65; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <a class="back-link" href="index.html">← 返回首页</a>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 匹配赛演示（主动匹配 / 被动开房）</h1>
+      <p>连接 <code>matchmaker_room</code>，收到 <code>match:found</code> 后自动加入 <code>game_room</code>，支持模拟断线与重连。</p>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>🔐 连接与参数</h2>
+          <div class="row">
+            <div>
+              <label>服务器地址（HTTP / WS 均可）</label>
+              <input id="serverUrl" value="http://localhost:2567" />
+            </div>
+            <div>
+              <label>JWT token（必填）</label>
+              <input id="token" placeholder="从 /api/auth/login 拿到 accessToken" />
+            </div>
+          </div>
+          <div class="row tight" style="margin-top: 10px;">
+            <div>
+              <label>demoUserId（演示用：同 token 多开请填不同）</label>
+              <input id="demoUserId" placeholder="例如 u1 / u2（留空则用 token 的 userId）" />
+            </div>
+          </div>
+          <div class="row tight" style="margin-top: 10px;">
+            <div>
+              <label>modeId</label>
+              <input id="modeId" value="ranked" />
+            </div>
+            <div>
+              <label>playersPerMatch（动态人数）</label>
+              <input id="playersPerMatch" type="number" min="2" max="100" value="2" />
+            </div>
+            <div>
+              <label>region（可选）</label>
+              <input id="region" placeholder="例如 cn1 / global" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <button class="btn success" id="btnConnectMm" onclick="connectMatchmaker()">连接 matchmaker_room</button>
+            <button class="btn danger" id="btnLeaveMm" onclick="leaveMatchmaker()" disabled>离开 matchmaker_room</button>
+          </div>
+
+          <div class="status">
+            <div class="kv"><b>Matchmaker 状态</b><span id="mmStatus">未连接</span></div>
+            <div class="kv"><b>matchmaker_roomId</b><span id="mmRoomId">-</span></div>
+            <div class="kv"><b>matchmaker_sessionId</b><span id="mmSessionId">-</span></div>
+            <div class="kv"><b>queueKey</b><span id="queueKey">-</span></div>
+          </div>
+
+          <div class="hint">
+            - 需要后端能验证 JWT（`RequireAuth`）。<br/>
+            - “动态人数”由接入方传入 `playersPerMatch`，框架只保证同队列内人数一致（`queueKey` 包含它）。
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>⚔️ 主动匹配（大厅点开始）</h2>
+          <div class="row">
+            <button class="btn" id="btnFind" onclick="startActiveMatch()" disabled>match:find（开始匹配）</button>
+            <button class="btn gray" id="btnCancel" onclick="cancelActiveMatch()" disabled>match:cancel（取消）</button>
+          </div>
+          <div class="hint">
+            匹配成功会收到 <code>match:found</code>，页面会自动 <code>joinById(roomId)</code> 进入对局。
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>🏠 被动开房（房间码 / 组队）</h2>
+          <div class="row">
+            <button class="btn" id="btnPartyCreate" onclick="partyCreate()" disabled>party:create（创建房间码）</button>
+            <button class="btn success" id="btnPartyStart" onclick="partyStart()" disabled>party:start（房主进入游戏）</button>
+            <button class="btn gray" id="btnPartyLeave" onclick="partyLeave()" disabled>party:leave（离开）</button>
+          </div>
+          <div class="row" style="margin-top: 10px;">
+            <div>
+              <label>partyCode</label>
+              <input id="partyCode" placeholder="例如 ABC123" />
+            </div>
+            <div style="flex:0.6; min-width: 160px;">
+              <label>&nbsp;</label>
+              <button class="btn success" id="btnPartyJoin" onclick="partyJoin()" disabled>party:join</button>
+            </div>
+          </div>
+          <div class="status">
+            <div class="kv"><b>partyId</b><span id="partyId">-</span></div>
+            <div class="kv"><b>当前人数</b><span id="partyCount">-</span></div>
+            <div class="kv"><b>目标人数</b><span id="partyTarget">-</span></div>
+          </div>
+          <div class="hint">
+            被动模式下：成员先加入 party，只有房主点击 <code>party:start</code> 后才会统一推送 <code>match:found</code> 并切入游戏页。
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>🎮 对局（game_room）与重连</h2>
+          <div class="status">
+            <div class="kv"><b>game_roomId</b><span id="gameRoomId">-</span></div>
+            <div class="kv"><b>game_sessionId</b><span id="gameSessionId">-</span></div>
+            <div class="kv"><b>matchId</b><span id="matchId">-</span></div>
+            <div class="kv"><b>seatIndex</b><span id="seatIndex">-</span></div>
+          </div>
+
+          <div style="margin-top: 12px;" class="row">
+            <button class="btn gray" id="btnLeaveGame" onclick="leaveGameRoom()" disabled>离开对局（正常）</button>
+            <button class="btn danger" id="btnSimDrop" onclick="simulateDrop()" disabled>模拟断线（非正常）</button>
+            <button class="btn success" id="btnReconnect" onclick="reconnectGameRoom()" disabled>重连（带 reconnectKey）</button>
+          </div>
+
+          <div class="row" style="margin-top: 10px;">
+            <div>
+              <label>reconnectKey（收到 match:found 后保存）</label>
+              <input id="reconnectKey" placeholder="自动填充" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 10px;">
+            <div>
+              <label>对局聊天（game_room 内 onMessage('chat')）</label>
+              <input id="gameChatText" placeholder="输入并发送 chat" />
+            </div>
+            <div style="flex:0.5; min-width: 140px;">
+              <label>&nbsp;</label>
+              <button class="btn" id="btnGameChat" onclick="sendGameChat()" disabled>发送 chat</button>
+            </div>
+          </div>
+
+          <div class="hint">
+            - 掉线后服务器会广播 <code>playerOffline</code>，重连成功会收到 <code>reconnect:ok</code>。<br/>
+            - 重连窗口由服务端环境变量 <code>MATCH_RECONNECT_WINDOW_MS</code> 控制（默认 15000ms）。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="justify-content: space-between;">
+            <h2 style="margin:0;">🧾 日志</h2>
+            <span class="pill" id="pillConn">未连接</span>
+          </div>
+          <div style="margin-top: 10px;" class="row">
+            <button class="btn gray" onclick="clearLog()">清空日志</button>
+          </div>
+          <div class="log" id="logBox" style="margin-top: 10px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 注意：localStorage 在同一浏览器的所有窗口/标签页共享
+    // 为避免“两个窗口填不同账号 token 却互相覆盖”，token/demoUserId 用 sessionStorage（每标签页独立）
+    const LS = {
+      serverUrl: "mmDemo_serverUrl",
+      modeId: "mmDemo_modeId",
+      playersPerMatch: "mmDemo_playersPerMatch",
+      region: "mmDemo_region",
+    };
+    const SS = {
+      token: "mmDemo_token",
+      demoUserId: "mmDemo_demoUserId",
+    };
+
+    let client = null;
+    let mmRoom = null;
+    let gameRoom = null;
+    let partyState = {
+      partyId: "",
+      count: 0,
+      playersPerMatch: 0,
+      leaderUserId: "",
+      isLeader: false,
+    };
+
+    // 记住最近一次 match found，用于重连
+    let lastFound = {
+      roomId: "",
+      matchId: "",
+      seatIndex: -1,
+      reconnectKey: "",
+    };
+
+    function $(id) { return document.getElementById(id); }
+    function now() { return new Date().toLocaleTimeString(); }
+    function log(msg) {
+      const el = $("logBox");
+      el.textContent = `[${now()}] ${msg}\n` + el.textContent;
+    }
+    function clearLog() { $("logBox").textContent = ""; log("日志已清空"); }
+
+    function persistInputs() {
+      localStorage.setItem(LS.serverUrl, $("serverUrl").value.trim());
+      sessionStorage.setItem(SS.token, $("token").value.trim());
+      sessionStorage.setItem(SS.demoUserId, ($("demoUserId") ? $("demoUserId").value.trim() : ""));
+      localStorage.setItem(LS.modeId, $("modeId").value.trim());
+      localStorage.setItem(LS.playersPerMatch, $("playersPerMatch").value.trim());
+      localStorage.setItem(LS.region, $("region").value.trim());
+    }
+    function restoreInputs() {
+      const v1 = localStorage.getItem(LS.serverUrl); if (v1) $("serverUrl").value = v1;
+      const v2 = sessionStorage.getItem(SS.token); if (v2) $("token").value = v2;
+      const v2b = sessionStorage.getItem(SS.demoUserId); if (v2b && $("demoUserId")) $("demoUserId").value = v2b;
+      const v3 = localStorage.getItem(LS.modeId); if (v3) $("modeId").value = v3;
+      const v4 = localStorage.getItem(LS.playersPerMatch); if (v4) $("playersPerMatch").value = v4;
+      const v5 = localStorage.getItem(LS.region); if (v5) $("region").value = v5;
+    }
+
+    function setMmStatus(text) {
+      $("mmStatus").textContent = text;
+      $("pillConn").textContent = text;
+    }
+    function setEnabled(id, enabled) { $(id).disabled = !enabled; }
+
+    function getJoinBaseOptions() {
+      const token = $("token").value.trim();
+      if (!token) throw new Error("请先填写 token");
+      const demoUserId = ($("demoUserId") ? $("demoUserId").value.trim() : "");
+      return demoUserId ? { token, demoUserId } : { token };
+    }
+
+    async function connectMatchmaker() {
+      if (typeof Colyseus === "undefined") {
+        alert("未加载 colyseus.js");
+        return;
+      }
+      persistInputs();
+      const serverUrl = $("serverUrl").value.trim();
+      if (!serverUrl) return alert("请输入 serverUrl");
+
+      try {
+        if (!client) client = new Colyseus.Client(serverUrl);
+        setMmStatus("连接中...");
+        log(`连接 matchmaker_room -> ${serverUrl}`);
+
+        mmRoom = await client.joinOrCreate("matchmaker_room", getJoinBaseOptions());
+
+        $("mmRoomId").textContent = mmRoom.roomId || "-";
+        $("mmSessionId").textContent = mmRoom.sessionId || "-";
+        setMmStatus("已连接 matchmaker_room");
+
+        setEnabled("btnConnectMm", false);
+        setEnabled("btnLeaveMm", true);
+        setEnabled("btnFind", true);
+        setEnabled("btnCancel", true);
+        setEnabled("btnPartyCreate", true);
+        setEnabled("btnPartyJoin", true);
+        setEnabled("btnPartyLeave", true);
+        setEnabled("btnPartyStart", false);
+
+        mmRoom.onLeave(() => {
+          log("已离开 matchmaker_room");
+          mmRoom = null;
+          $("mmRoomId").textContent = "-";
+          $("mmSessionId").textContent = "-";
+          $("queueKey").textContent = "-";
+          setMmStatus("未连接");
+
+          setEnabled("btnConnectMm", true);
+          setEnabled("btnLeaveMm", false);
+          setEnabled("btnFind", false);
+          setEnabled("btnCancel", false);
+          setEnabled("btnPartyCreate", false);
+          setEnabled("btnPartyJoin", false);
+          setEnabled("btnPartyLeave", false);
+          setEnabled("btnPartyStart", false);
+        });
+
+        mmRoom.onError((code, message) => {
+          log(`matchmaker_room error [${code}]: ${message}`);
+        });
+
+        mmRoom.onMessage("mm:ready", (msg) => log(`mm:ready sessionId=${msg.sessionId}`));
+        mmRoom.onMessage("match:queued", (msg) => {
+          $("queueKey").textContent = msg.queueKey || "-";
+          log(`match:queued queueKey=${msg.queueKey}`);
+        });
+        mmRoom.onMessage("match:cancelled", (msg) => log(`match:cancelled ok=${!!msg.ok}`));
+        mmRoom.onMessage("match:error", (msg) => log(`match:error ${JSON.stringify(msg)}`));
+
+        mmRoom.onMessage("party:created", (msg) => {
+          $("partyId").textContent = msg.partyId || "-";
+          $("partyCode").value = msg.partyCode || "";
+          $("partyTarget").textContent = String(msg.playersPerMatch ?? "-");
+          $("partyCount").textContent = "1";
+          partyState.partyId = String(msg.partyId || "");
+          partyState.count = 1;
+          partyState.playersPerMatch = Number(msg.playersPerMatch || 0);
+          partyState.leaderUserId = String(msg.leaderUserId || "");
+          partyState.isLeader = !!msg.isLeader;
+          setEnabled("btnPartyStart", partyState.isLeader);
+          log(`party:created code=${msg.partyCode} target=${msg.playersPerMatch}`);
+        });
+        mmRoom.onMessage("party:joined", (msg) => {
+          $("partyId").textContent = msg.partyId || "-";
+          $("partyCode").value = msg.partyCode || $("partyCode").value;
+          $("partyCount").textContent = String(msg.count ?? "-");
+          $("partyTarget").textContent = String(msg.playersPerMatch ?? "-");
+          partyState.partyId = String(msg.partyId || "");
+          partyState.count = Number(msg.count || 0);
+          partyState.playersPerMatch = Number(msg.playersPerMatch || 0);
+          partyState.leaderUserId = String(msg.leaderUserId || "");
+          partyState.isLeader = !!msg.isLeader;
+          setEnabled("btnPartyStart", partyState.isLeader);
+          log(`party:joined count=${msg.count}/${msg.playersPerMatch}`);
+        });
+        mmRoom.onMessage("party:update", (msg) => {
+          $("partyId").textContent = msg.partyId || "-";
+          $("partyCount").textContent = String(msg.count ?? "-");
+          $("partyTarget").textContent = String(msg.playersPerMatch ?? "-");
+          partyState.partyId = String(msg.partyId || "");
+          partyState.count = Number(msg.count || 0);
+          partyState.playersPerMatch = Number(msg.playersPerMatch || 0);
+          partyState.leaderUserId = String(msg.leaderUserId || "");
+          partyState.isLeader = !!msg.isLeader;
+          setEnabled("btnPartyStart", partyState.isLeader);
+          log(`party:update count=${msg.count}/${msg.playersPerMatch} isLeader=${partyState.isLeader}`);
+        });
+        mmRoom.onMessage("party:left", (msg) => log(`party:left ok=${!!msg.ok}`));
+        mmRoom.onMessage("party:error", (msg) => log(`party:error ${msg.message || JSON.stringify(msg)}`));
+
+        mmRoom.onMessage("match:found", async (msg) => {
+          log(`match:found roomId=${msg.roomId} seat=${msg.seatIndex} matchId=${msg.matchId}`);
+          lastFound.roomId = msg.roomId || "";
+          lastFound.matchId = msg.matchId || "";
+          lastFound.seatIndex = typeof msg.seatIndex === "number" ? msg.seatIndex : -1;
+          lastFound.reconnectKey = msg.reconnectKey || "";
+          $("reconnectKey").value = lastFound.reconnectKey;
+
+          $("matchId").textContent = lastFound.matchId || "-";
+          $("seatIndex").textContent = String(lastFound.seatIndex);
+
+          // 匹配成功后统一切入新页面（所有匹配到的人都会跳转）
+          try {
+            const payload = {
+              serverUrl: $("serverUrl").value.trim(),
+              token: $("token").value.trim(),
+              demoUserId: ($("demoUserId") ? $("demoUserId").value.trim() : ""),
+              roomId: lastFound.roomId,
+              matchId: lastFound.matchId,
+              seatIndex: lastFound.seatIndex,
+              reconnectKey: lastFound.reconnectKey,
+            };
+            sessionStorage.setItem("xymj_match_found", JSON.stringify(payload));
+          } catch (e) {}
+          window.location.href = "MatchmakingGame.html";
+        });
+
+        log("matchmaker_room 连接成功");
+      } catch (e) {
+        console.error(e);
+        setMmStatus("连接失败");
+        log("连接失败: " + (e.message || e));
+        alert("连接失败: " + (e.message || e));
+      }
+    }
+
+    async function leaveMatchmaker() {
+      if (!mmRoom) return;
+      try { await mmRoom.leave(); } catch (e) {}
+    }
+
+    function buildMatchParams() {
+      const modeId = ($("modeId").value || "default").trim();
+      const playersPerMatch = parseInt($("playersPerMatch").value, 10) || 2;
+      const regionRaw = ($("region").value || "").trim();
+      const payload = { modeId, playersPerMatch };
+      if (regionRaw) payload.region = regionRaw;
+      return payload;
+    }
+
+    function startActiveMatch() {
+      if (!mmRoom) return alert("请先连接 matchmaker_room");
+      const payload = buildMatchParams();
+      mmRoom.send("match:find", payload);
+      log("send match:find " + JSON.stringify(payload));
+    }
+
+    function cancelActiveMatch() {
+      if (!mmRoom) return;
+      mmRoom.send("match:cancel", {});
+      log("send match:cancel");
+    }
+
+    function partyCreate() {
+      if (!mmRoom) return alert("请先连接 matchmaker_room");
+      const payload = buildMatchParams();
+      mmRoom.send("party:create", payload);
+      log("send party:create " + JSON.stringify(payload));
+    }
+
+    function partyJoin() {
+      if (!mmRoom) return alert("请先连接 matchmaker_room");
+      const partyCode = ($("partyCode").value || "").trim();
+      if (!partyCode) return alert("请输入 partyCode");
+      mmRoom.send("party:join", { partyCode });
+      log("send party:join " + partyCode);
+    }
+
+    function partyLeave() {
+      if (!mmRoom) return;
+      mmRoom.send("party:leave", {});
+      log("send party:leave");
+      $("partyId").textContent = "-";
+      $("partyCount").textContent = "-";
+      $("partyTarget").textContent = "-";
+      partyState = { partyId: "", count: 0, playersPerMatch: 0, leaderUserId: "", isLeader: false };
+      setEnabled("btnPartyStart", false);
+    }
+
+    function partyStart() {
+      if (!mmRoom) return alert("请先连接 matchmaker_room");
+      if (!partyState.isLeader) return alert("只有房主可以开始游戏");
+      mmRoom.send("party:start", {});
+      log("send party:start");
+    }
+
+    async function joinGameRoomByFound(foundMsg) {
+      try {
+        if (!client) throw new Error("client not ready");
+        const roomId = foundMsg.roomId;
+        if (!roomId) throw new Error("match:found missing roomId");
+
+        // 若已在房间，先离开
+        if (gameRoom) {
+          try { await gameRoom.leave(); } catch (e) {}
+          gameRoom = null;
+        }
+
+        const token = $("token").value.trim();
+        const joinOpt = {
+          token,
+          matchId: foundMsg.matchId,
+          seatIndex: foundMsg.seatIndex,
+          reconnectKey: foundMsg.reconnectKey,
+        };
+
+        log("joinById(game_room) -> " + roomId);
+        gameRoom = await client.joinById(roomId, joinOpt);
+
+        $("gameRoomId").textContent = gameRoom.roomId || "-";
+        $("gameSessionId").textContent = gameRoom.sessionId || "-";
+        setEnabled("btnLeaveGame", true);
+        setEnabled("btnSimDrop", true);
+        setEnabled("btnReconnect", true);
+        setEnabled("btnGameChat", true);
+
+        gameRoom.onLeave((code) => {
+          log("game_room onLeave code=" + code);
+          $("gameRoomId").textContent = "-";
+          $("gameSessionId").textContent = "-";
+          setEnabled("btnLeaveGame", false);
+          setEnabled("btnSimDrop", false);
+          setEnabled("btnGameChat", false);
+          // 允许重连（如果我们有 lastFound）
+          setEnabled("btnReconnect", !!lastFound.roomId);
+          gameRoom = null;
+        });
+
+        gameRoom.onError((code, message) => log(`game_room error [${code}]: ${message}`));
+        gameRoom.onMessage("reconnect:ok", (msg) => log("reconnect:ok " + JSON.stringify(msg)));
+        gameRoom.onMessage("playerOffline", (msg) => log("playerOffline " + JSON.stringify(msg)));
+        gameRoom.onMessage("playerOnline", (msg) => log("playerOnline " + JSON.stringify(msg)));
+        gameRoom.onMessage("chat", (msg) => log("game chat " + JSON.stringify(msg)));
+
+        // 简单展示 state 变化（玩家在线/座位）
+        gameRoom.onStateChange((state) => {
+          try {
+            const ps = [];
+            if (state.players && state.players.forEach) {
+              state.players.forEach((p, sid) => {
+                ps.push({
+                  sid: String(sid).slice(0, 8),
+                  userId: p.userId,
+                  seat: p.seatIndex,
+                  online: p.online,
+                });
+              });
+            }
+            if (ps.length) log("state players=" + JSON.stringify(ps));
+          } catch (e) {}
+        });
+
+        log("✅ 已加入 game_room");
+      } catch (e) {
+        console.error(e);
+        log("join game_room 失败: " + (e.message || e));
+      }
+    }
+
+    async function leaveGameRoom() {
+      if (!gameRoom) return;
+      try { await gameRoom.leave(); } catch (e) {}
+    }
+
+    function simulateDrop() {
+      if (!gameRoom) return;
+      try {
+        // 非正常断线：关闭底层连接
+        if (gameRoom.connection && gameRoom.connection.transport && gameRoom.connection.transport.close) {
+          gameRoom.connection.transport.close();
+        } else if (gameRoom.connection && gameRoom.connection.close) {
+          gameRoom.connection.close();
+        } else {
+          // fallback：快速 leave（不等于真实掉线，但保底）
+          gameRoom.leave();
+        }
+        log("已触发模拟断线");
+      } catch (e) {
+        log("模拟断线失败: " + (e.message || e));
+      }
+    }
+
+    async function reconnectGameRoom() {
+      if (!client) return alert("client 未初始化");
+      if (!lastFound.roomId) return alert("没有可重连的 roomId（需要先 match:found）");
+      const token = $("token").value.trim();
+      const reconnectKey = ($("reconnectKey").value || "").trim();
+      if (!reconnectKey) return alert("没有 reconnectKey");
+
+      try {
+        log("尝试重连 joinById -> " + lastFound.roomId);
+        gameRoom = await client.joinById(lastFound.roomId, {
+          token,
+          matchId: lastFound.matchId,
+          reconnectKey,
+          seatIndex: lastFound.seatIndex,
+        });
+        $("gameRoomId").textContent = gameRoom.roomId || "-";
+        $("gameSessionId").textContent = gameRoom.sessionId || "-";
+        setEnabled("btnLeaveGame", true);
+        setEnabled("btnSimDrop", true);
+        setEnabled("btnGameChat", true);
+        log("✅ 重连 joinById 成功（等服务端下发 reconnect:ok）");
+      } catch (e) {
+        console.error(e);
+        log("重连失败: " + (e.message || e));
+        alert("重连失败: " + (e.message || e));
+      }
+    }
+
+    function sendGameChat() {
+      if (!gameRoom) return;
+      const text = ($("gameChatText").value || "").trim();
+      if (!text) return;
+      gameRoom.send("chat", text);
+      $("gameChatText").value = "";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      restoreInputs();
+      ["serverUrl","token","demoUserId","modeId","playersPerMatch","region"].forEach((id) => {
+        $(id).addEventListener("input", persistInputs);
+      });
+
+      // 初始禁用
+      setEnabled("btnLeaveMm", false);
+      setEnabled("btnFind", false);
+      setEnabled("btnCancel", false);
+      setEnabled("btnPartyCreate", false);
+      setEnabled("btnPartyJoin", false);
+      setEnabled("btnPartyLeave", false);
+      setEnabled("btnPartyStart", false);
+      setEnabled("btnLeaveGame", false);
+      setEnabled("btnSimDrop", false);
+      setEnabled("btnReconnect", false);
+      setEnabled("btnGameChat", false);
+    });
+  </script>
+</body>
+</html>
+

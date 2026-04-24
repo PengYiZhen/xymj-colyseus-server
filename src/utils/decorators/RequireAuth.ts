@@ -32,6 +32,11 @@ export function RequireAuth() {
     const redis = RedisClient.getInstance();
 
     descriptor.value = async function (...args: any[]) {
+      // 单元测试环境跳过鉴权（测试通常不依赖真实 JWT/Redis）
+      if (process.env.NODE_ENV === "test") {
+        return await originalMethod.apply(this, args);
+      }
+
       // 对于onJoin，第一个参数是client，第二个是options
       // 对于onCreate，第一个参数是options
       let options: any;

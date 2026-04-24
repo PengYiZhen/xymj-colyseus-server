@@ -110,7 +110,17 @@ export class AuthService {
     // 查找用户（包含密码字段）
     const user = await this.userRepository.findOne({
       where: [{ username: dto.username }, { email: dto.username }],
-      select: ['id', 'username', 'email', 'password', 'nickname', 'avatar', 'status'],
+      select: [
+        'id',
+        'username',
+        'email',
+        'password',
+        'nickname',
+        'avatar',
+        'openid',
+        'guildId',
+        'status',
+      ],
     });
 
     if (!user) {

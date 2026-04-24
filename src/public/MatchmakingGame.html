@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>对局准备 - 小游码匠</title>
+  <script src="https://unpkg.com/colyseus.js@^0.16.0/dist/colyseus.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(99,102,241,0.45), transparent 60%),
+                  radial-gradient(1000px 500px at 80% 20%, rgba(34,197,94,0.32), transparent 55%),
+                  linear-gradient(135deg, #0b1020 0%, #1f2a44 50%, #0b1020 100%);
+      color: #e5e7eb;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 14px;
+      background: #6366f1;
+      color: #fff;
+      transition: transform 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+      white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .btn.gray { background: #64748b; }
+    .btn.danger { background: #dc2626; }
+    .btn.success { background: #16a34a; }
+    .title h1 { margin: 0; font-size: 1.8rem; }
+    .title p { margin: 6px 0 0; opacity: 0.9; font-size: 13px; }
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      backdrop-filter: blur(8px);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .kv {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .kv .item {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .kv .item b { display:block; font-size: 12px; opacity: 0.75; margin-bottom: 4px; }
+    .kv .item span { display:block; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pill {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(34,197,94,0.14);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: #bbf7d0;
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .pill.warn {
+      background: rgba(245,158,11,0.14);
+      border-color: rgba(245,158,11,0.25);
+      color: #fde68a;
+    }
+    .log {
+      height: 360px;
+      overflow: auto;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .players {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .player {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .player .name { font-weight: 900; }
+    .player .meta { opacity: 0.85; font-size: 12px; margin-top: 4px; }
+    code { background: rgba(99,102,241,0.14); padding: 2px 6px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="title">
+        <h1>🎮 对局准备</h1>
+        <p>来自匹配结果的统一入口页：自动加入 <code>game_room</code>，等待所有人到齐后开始。</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+        <span class="pill" id="statusPill">准备中</span>
+        <button class="btn gray" onclick="backToMatch()">返回匹配页</button>
+        <button class="btn danger" id="btnLeave" onclick="leaveRoom()" disabled>离开对局</button>
+        <button class="btn success" id="btnReconnect" onclick="reconnectRoom()" disabled>重连</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <h2 style="margin:0;">📌 房间信息</h2>
+          <button class="btn" id="btnJoin" onclick="joinRoom()">加入对局</button>
+        </div>
+
+        <div class="kv">
+          <div class="item"><b>serverUrl</b><span id="serverUrl">-</span></div>
+          <div class="item"><b>roomId</b><span id="roomId">-</span></div>
+          <div class="item"><b>matchId</b><span id="matchId">-</span></div>
+          <div class="item"><b>seatIndex</b><span id="seatIndex">-</span></div>
+          <div class="item"><b>reconnectKey</b><span id="reconnectKey">-</span></div>
+          <div class="item"><b>sessionId</b><span id="sessionId">-</span></div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <h3 style="margin:0 0 10px;">👥 玩家列表（来自 state.players）</h3>
+          <div class="players" id="playersBox"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <h2 style="margin:0;">🧾 日志</h2>
+          <button class="btn gray" onclick="clearLog()">清空</button>
+        </div>
+        <div class="log" id="logBox" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let client = null;
+    let room = null;
+    let payload = null;
+
+    function $(id) { return document.getElementById(id); }
+    function now() { return new Date().toLocaleTimeString(); }
+    function log(msg) { $("logBox").textContent = `[${now()}] ${msg}\n` + $("logBox").textContent; }
+    function clearLog() { $("logBox").textContent = ""; log("日志已清空"); }
+
+    function setPill(text, kind) {
+      const el = $("statusPill");
+      el.textContent = text;
+      el.className = kind === "warn" ? "pill warn" : "pill";
+    }
+
+    function loadPayload() {
+      try {
+        const raw = sessionStorage.getItem("xymj_match_found");
+        payload = raw ? JSON.parse(raw) : null;
+      } catch (e) { payload = null; }
+
+      if (!payload || !payload.serverUrl || !payload.token || !payload.roomId) {
+        setPill("缺少匹配信息", "warn");
+        log("未找到 sessionStorage[xymj_match_found]，请从 MatchmakingDemo.html 重新进入");
+        $("btnJoin").disabled = true;
+        $("btnReconnect").disabled = true;
+        return;
+      }
+
+      $("serverUrl").textContent = payload.serverUrl;
+      $("roomId").textContent = payload.roomId;
+      $("matchId").textContent = payload.matchId || "-";
+      $("seatIndex").textContent = String(payload.seatIndex ?? "-");
+      $("reconnectKey").textContent = payload.reconnectKey || "-";
+      setPill("待加入对局");
+    }
+
+    function renderPlayers(state) {
+      const box = $("playersBox");
+      box.innerHTML = "";
+      const list = [];
+      try {
+        if (state && state.players && state.players.forEach) {
+          state.players.forEach((p, sid) => {
+            list.push({
+              sid: String(sid),
+              userId: p.userId,
+              seatIndex: p.seatIndex,
+              online: p.online,
+            });
+          });
+        }
+      } catch (e) {}
+
+      if (!list.length) {
+        const div = document.createElement("div");
+        div.className = "player";
+        div.textContent = "暂无玩家信息（等待 state 同步）";
+        box.appendChild(div);
+        return;
+      }
+
+      list.sort((a,b) => (a.seatIndex - b.seatIndex));
+      for (const p of list) {
+        const div = document.createElement("div");
+        div.className = "player";
+        div.innerHTML =
+          `<div class="name">seat ${p.seatIndex} · ${String(p.userId || "unknown")}</div>` +
+          `<div class="meta">online=${p.online} · sid=${p.sid.slice(0,8)}</div>`;
+        box.appendChild(div);
+      }
+    }
+
+    async function joinRoom() {
+      if (!payload) return;
+      if (typeof Colyseus === "undefined") return alert("未加载 colyseus.js");
+      try {
+        setPill("加入中...");
+        log(`joinById -> ${payload.roomId}`);
+        client = new Colyseus.Client(payload.serverUrl);
+        room = await client.joinById(payload.roomId, {
+          token: payload.token,
+          demoUserId: payload.demoUserId || undefined,
+          matchId: payload.matchId,
+          seatIndex: payload.seatIndex,
+          reconnectKey: payload.reconnectKey,
+        });
+
+        $("sessionId").textContent = room.sessionId || "-";
+        $("btnLeave").disabled = false;
+        $("btnJoin").disabled = true;
+        $("btnReconnect").disabled = false;
+
+        setPill("已进入房间，等待开始");
+        log("✅ 已加入 game_room，准备开始游戏");
+
+        room.onMessage("reconnect:ok", (msg) => log("reconnect:ok " + JSON.stringify(msg)));
+        room.onMessage("playerOffline", (msg) => log("playerOffline " + JSON.stringify(msg)));
+        room.onMessage("playerOnline", (msg) => log("playerOnline " + JSON.stringify(msg)));
+        room.onLeave((code) => {
+          log("onLeave code=" + code);
+          setPill("已离开，等待重连", "warn");
+          $("btnJoin").disabled = true;
+          $("btnLeave").disabled = true;
+          $("btnReconnect").disabled = false;
+          room = null;
+        });
+        room.onError((code, message) => log(`error [${code}] ${message}`));
+
+        // state
+        room.onStateChange((state) => {
+          renderPlayers(state);
+        });
+      } catch (e) {
+        console.error(e);
+        setPill("加入失败", "warn");
+        log("加入失败: " + (e.message || e));
+        alert("加入失败: " + (e.message || e));
+      }
+    }
+
+    async function leaveRoom() {
+      if (!room) return;
+      try { await room.leave(); } catch (e) {}
+    }
+
+    async function reconnectRoom() {
+      if (!payload) return;
+      if (typeof Colyseus === "undefined") return alert("未加载 colyseus.js");
+      try {
+        setPill("重连中...");
+        log(`reconnect joinById -> ${payload.roomId}`);
+        client = new Colyseus.Client(payload.serverUrl);
+        room = await client.joinById(payload.roomId, {
+          token: payload.token,
+          demoUserId: payload.demoUserId || undefined,
+          matchId: payload.matchId,
+          seatIndex: payload.seatIndex,
+          reconnectKey: payload.reconnectKey,
+        });
+        $("sessionId").textContent = room.sessionId || "-";
+        $("btnLeave").disabled = false;
+        $("btnReconnect").disabled = false;
+        setPill("已重连，等待开始");
+        log("✅ 重连成功");
+        room.onStateChange((state) => renderPlayers(state));
+      } catch (e) {
+        console.error(e);
+        setPill("重连失败", "warn");
+        log("重连失败: " + (e.message || e));
+        alert("重连失败: " + (e.message || e));
+      }
+    }
+
+    function backToMatch() {
+      window.location.href = "MatchmakingDemo.html";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadPayload();
+      // 自动加入（像“切入新页面准备开始游戏”）
+      if ($("btnJoin").disabled !== true) {
+        joinRoom();
+      }
+    });
+  </script>
+</body>
+</html>
+

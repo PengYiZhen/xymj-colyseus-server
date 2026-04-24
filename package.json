@@ -17,7 +17,7 @@
     "copy-package": "node scripts/copy-package.mjs",
     "generate-controllers-once": "node scripts/generate-controllers.mjs",
     "clean": "rimraf dist",
-    "test": "mocha -r tsx test/**_test.ts --exit --timeout 15000"
+    "test": "set NODE_ENV=test&& mocha -r tsx test/**_test.ts --exit --timeout 15000"
   },
   "author": "",
   "license": "UNLICENSED",

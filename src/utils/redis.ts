@@ -47,16 +47,16 @@ class RedisClient {
       });
 
       this.client.on('connect', () => {
-        console.log('✅ Redis 连接成功');
+        console.log('[数据库]✅ Redis 连接成功');
       });
 
       this.client.on('error', (err: any) => {
         const errorMsg = err?.message || err?.code || '未知错误';
-        console.error(`❌ Redis 连接错误: ${errorMsg}`);
+        console.error(`[数据库]❌ Redis 连接错误: ${errorMsg}`);
       });
 
       this.client.on('close', () => {
-        console.log('✅ Redis 连接已关闭');
+        console.log('[数据库]✅ Redis 连接已关闭');
       });
     }
 

@@ -12,10 +12,14 @@
 // 必须在最顶部导入 reflect-metadata，TypeORM 需要它
 import "reflect-metadata";
 
+import { installConsolePrefix } from "./utils/log";
 import { listen } from "@colyseus/tools";
 
 // Import Colyseus config
 import app from "./app.config";
+
+// 统一控制台输出格式：[xymj][类别]，并用蓝色前缀显示
+installConsolePrefix("系统");
 
 // Create and listen on 2567 (or PORT environment variable.)
 listen(app);
