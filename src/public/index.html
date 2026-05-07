@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: min(1680px, 96vw);
             margin: 0 auto;
         }
 
@@ -70,11 +70,30 @@
             font-size: 1.3em;
         }
 
+        /* 框架特性：避免中间宽度出现 3 列，大屏多列更舒展 */
         .feature-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: 1fr;
             gap: 20px;
             margin-bottom: 30px;
+        }
+
+        @media (min-width: 520px) {
+            .feature-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 960px) {
+            .feature-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1400px) {
+            .feature-grid {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
         }
 
         .feature-item {
@@ -314,6 +333,22 @@
                         🎮 体验演示 →
                     </a>
                 </div>
+                <div class="feature-item">
+                    <div class="icon">💬</div>
+                    <h3>多模式聊天</h3>
+                    <p>世界、工会、附近、队伍等多频道 Colyseus 聊天房间</p>
+                    <a href="ChatDemo.html" style="display: inline-block; margin-top: 10px; color: #667eea; text-decoration: none; font-size: 0.9em;">
+                        💬 体验演示 →
+                    </a>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">🎯</div>
+                    <h3>匹配机制</h3>
+                    <p>主动大厅匹配、被动房间码开房、Redis 队列与断线重连</p>
+                    <a href="MatchmakingDemo.html" style="display: inline-block; margin-top: 10px; color: #667eea; text-decoration: none; font-size: 0.9em;">
+                        🎯 体验演示 →
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -528,26 +563,26 @@
         </div>
 
         <div class="card">
-            <h2>💬 聊天演示</h2>
+            <h2>💬 多模式聊天</h2>
             <div class="api-endpoint" style="background: #f0f4ff; border-left-color: #667eea;">
                 <div>
                     <span class="method get" style="background: #667eea;">DEMO</span>
                     <span class="endpoint-path">ChatDemo.html</span>
-                    <span class="status-badge status-info">交互式演示</span>
+                    <span class="status-badge status-info">世界 / 工会 / 附近 / 队伍</span>
                 </div>
                 <div class="description">
-                    打开世界/工会/附近/队伍聊天房间的交互式演示程序
+                    多频道实时聊天：进入世界、工会、附近、队伍等房间收发消息
                 </div>
                 <div style="margin-top: 15px;">
                     <a href="ChatDemo.html" class="swagger-link" style="color: #667eea; border-bottom-color: #667eea;">
-                        💬 打开聊天演示程序 →
+                        💬 打开多模式聊天演示 →
                     </a>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h2>🎯 匹配赛演示</h2>
+            <h2>🎯 匹配机制</h2>
             <div class="api-endpoint" style="background: #f5f3ff; border-left-color: #7c3aed;">
                 <div>
                     <span class="method get" style="background: #7c3aed;">DEMO</span>
@@ -555,7 +590,7 @@
                     <span class="status-badge status-info">主动匹配 / 被动开房 / 重连</span>
                 </div>
                 <div class="description">
-                    类王者荣耀：大厅点开始匹配（动态人数）与房间码开房加入；匹配成功自动进入 <code>game_room</code>，支持模拟断线与重连
+                    大厅排队匹配（动态人数）与房间码开房；成功后进入 <code>game_room</code>，支持断线重连
                 </div>
                 <div style="margin-top: 15px;">
                     <a href="MatchmakingDemo.html" class="swagger-link" style="color: #7c3aed; border-bottom-color: #7c3aed;">
@@ -563,7 +598,7 @@
                     </a>
                 </div>
                 <div class="description" style="margin-top: 10px; color:#666;">
-                    <strong>提示：</strong>匹配成功后会自动跳转到 <code>MatchmakingGame.html</code> 进行“对局准备/开始游戏”。
+                    <strong>提示：</strong>匹配成功后可跳转 <code>MatchmakingGame.html</code> 进入对局。
                 </div>
             </div>
         </div>

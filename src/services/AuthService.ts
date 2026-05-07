@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
 import { getConnection } from '../database/connection';
@@ -166,6 +167,75 @@ export class AuthService {
       user,
       tokens,
     };
+  }
+
+  /**
+   * 微信/抖音小游戏：按平台侧 openid（或匿名 id）查找或创建用户。
+   * 返回的实体未查询 password 字段。
+   */
+  async findOrCreateMinigameUser(params: {
+    openid: string;
+    platform: 'weixin' | 'douyin';
+  }): Promise<User> {
+    const { openid, platform } = params;
+    if (!openid) {
+      throw new Error('openid 不能为空');
+    }
+
+    const existing = await this.userRepository.findOne({
+      where: { openid },
+      select: [
+        'id',
+        'username',
+        'email',
+        'nickname',
+        'avatar',
+        'openid',
+        'guildId',
+        'status',
+        'createdAt',
+        'updatedAt',
+        'version',
+      ],
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const randomSuffix = randomUUID().replace(/-/g, '').slice(0, 16);
+    const username = `mg_${platform}_${randomSuffix}`.slice(0, 64);
+    const email = `${platform}_${randomUUID()}@minigame.local`;
+    const hashedPassword = await bcrypt.hash(randomUUID(), 10);
+
+    const created = this.userRepository.create({
+      username,
+      email,
+      password: hashedPassword,
+      openid,
+      status: 1,
+    });
+    await this.userRepository.save(created);
+
+    const saved = await this.userRepository.findOne({
+      where: { id: created.id },
+      select: [
+        'id',
+        'username',
+        'email',
+        'nickname',
+        'avatar',
+        'openid',
+        'guildId',
+        'status',
+        'createdAt',
+        'updatedAt',
+        'version',
+      ],
+    });
+    if (!saved) {
+      throw new Error('创建小游戏用户失败');
+    }
+    return saved;
   }
 
   /**

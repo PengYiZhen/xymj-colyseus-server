@@ -1,8 +1,10 @@
 import axios from "axios";
 import { DouYinConfig, WeiXinConfig } from "../config/minigame";
 import RedisClient from "../utils/redis";
-import JWTUtil, { TokenPair } from "../utils/jwt";
+import JWTUtil from "../utils/jwt";
 import config from "../config";
+import { AuthService } from "./AuthService";
+import { User } from "../models/User";
 
 export interface AccessToken {
     access_token: string;
@@ -27,6 +29,8 @@ export interface DouYinCode2SessionResponse {
     errmsg?: string; // 错误信息
     message?: string; // 错误信息（同 errmsg）
     token?: string; // JWT token
+    /** 本地用户资料（不含 password） */
+    user?: Omit<User, "password">;
 }
 
 /**
@@ -39,6 +43,8 @@ export interface WeiXinCode2SessionResponse {
     errcode?: number; // 错误码，0 表示成功
     errmsg?: string; // 错误信息
     token?: string; // JWT token
+    /** 本地用户资料（不含 password） */
+    user?: Omit<User, "password">;
 }
 
 /**
@@ -53,6 +59,7 @@ export class AccessTokenAndLoginService {
     private redis: RedisClient;
     private readonly DOUYIN_TOKEN_KEY = "douyin_access_token";
     private readonly WEIXIN_TOKEN_KEY = "weixin_access_token";
+    private readonly authService = new AuthService();
 
     /**
      * 将JWT过期时间字符串转换为秒数
@@ -207,35 +214,43 @@ export class AccessTokenAndLoginService {
                 throw new Error(`获取抖音用户信息失败: ${errorMsg} (error: ${errorCode})`);
             }
 
-            // 使用 openid 或 anonymous_openid 或 unionid 作为用户标识
-            const userId = response.data.openid || response.data.anonymous_openid || response.data.unionid || '';
-            
-            // 生成 JWT token
+            const openidKey =
+                response.data.openid ||
+                response.data.anonymous_openid ||
+                response.data.unionid ||
+                '';
+
             let jwtToken: string | undefined;
-            if (userId) {
+            let user: Omit<User, 'password'> | undefined;
+            if (openidKey) {
+                const dbUser = await this.authService.findOrCreateMinigameUser({
+                    openid: openidKey,
+                    platform: 'douyin',
+                });
+                user = dbUser as Omit<User, 'password'>;
+
                 const tokens = JWTUtil.generateTokenPair({
-                    userId: userId,
-                    username: userId, // 使用 openid 作为 username
+                    userId: dbUser.id,
+                    username: dbUser.username,
+                    email: dbUser.email,
                     openid: response.data.openid,
                     anonymous_openid: response.data.anonymous_openid,
                     unionid: response.data.unionid,
-                    platform: 'douyin'
+                    platform: 'douyin',
                 });
 
                 jwtToken = tokens.accessToken;
 
-                // 将刷新令牌存储到 Redis
                 const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
                 await this.redis.set(
-                    `refresh_token:${userId}`,
+                    `refresh_token:${dbUser.id}`,
                     tokens.refreshToken,
                     refreshTokenExpire
                 );
 
-                // 将访问令牌存储到 Redis（用于房间连接验证）
                 const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
                 await this.redis.set(
-                    `access_token:${userId}`,
+                    `access_token:${dbUser.id}`,
                     tokens.accessToken,
                     accessTokenExpire
                 );
@@ -250,7 +265,8 @@ export class AccessTokenAndLoginService {
                 errcode: response.data.errcode,
                 errmsg: response.data.errmsg,
                 message: response.data.message,
-                token: jwtToken
+                token: jwtToken,
+                user,
             };
         } catch (error: any) {
             throw new Error(`获取抖音用户信息异常: ${error.message || '未知错误'}`);
@@ -284,34 +300,38 @@ export class AccessTokenAndLoginService {
                 throw new Error(`获取微信用户信息失败: ${response.data.errmsg || '未知错误'} (errcode: ${response.data.errcode})`);
             }
 
-            // 使用 openid 或 unionid 作为用户标识
-            const userId = response.data.openid || response.data.unionid || '';
-            
-            // 生成 JWT token
+            const openidKey = response.data.openid || response.data.unionid || '';
+
             let jwtToken: string | undefined;
-            if (userId) {
+            let user: Omit<User, 'password'> | undefined;
+            if (openidKey) {
+                const dbUser = await this.authService.findOrCreateMinigameUser({
+                    openid: openidKey,
+                    platform: 'weixin',
+                });
+                user = dbUser as Omit<User, 'password'>;
+
                 const tokens = JWTUtil.generateTokenPair({
-                    userId: userId,
-                    username: userId, // 使用 openid 作为 username
+                    userId: dbUser.id,
+                    username: dbUser.username,
+                    email: dbUser.email,
                     openid: response.data.openid,
                     unionid: response.data.unionid,
-                    platform: 'weixin'
+                    platform: 'weixin',
                 });
 
                 jwtToken = tokens.accessToken;
 
-                // 将刷新令牌存储到 Redis
                 const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
                 await this.redis.set(
-                    `refresh_token:${userId}`,
+                    `refresh_token:${dbUser.id}`,
                     tokens.refreshToken,
                     refreshTokenExpire
                 );
 
-                // 将访问令牌存储到 Redis（用于房间连接验证）
                 const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
                 await this.redis.set(
-                    `access_token:${userId}`,
+                    `access_token:${dbUser.id}`,
                     tokens.accessToken,
                     accessTokenExpire
                 );
@@ -323,7 +343,8 @@ export class AccessTokenAndLoginService {
                 unionid: response.data.unionid,
                 errcode: response.data.errcode,
                 errmsg: response.data.errmsg,
-                token: jwtToken
+                token: jwtToken,
+                user,
             };
         } catch (error: any) {
             throw new Error(`获取微信用户信息异常: ${error.message || '未知错误'}`);
