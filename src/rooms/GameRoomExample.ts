@@ -8,7 +8,7 @@ import RedisClient from "../utils/redis";
 /**
  * 游戏房间示例 - 使用帧同步
  */
-export class GameRoom extends FrameSyncRoom<MyRoomState> {
+export class GameRoomExample extends FrameSyncRoom<MyRoomState> {
   maxClients = 4;
   state = new MyRoomState();
   private reconnectWindowMs = Number.parseInt(

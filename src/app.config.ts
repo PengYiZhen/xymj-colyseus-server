@@ -14,7 +14,7 @@ import { routingControllersToSpec } from "routing-controllers-openapi";
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom";
-import { GameRoom } from "./rooms/GameRoom";
+import { GameRoomExample } from "./rooms/GameRoomExample";
 import { WorldChatRoom } from "./rooms/chat/WorldChatRoom";
 import { GuildChatRoom } from "./rooms/chat/GuildChatRoom";
 import { NearbyChatRoom } from "./rooms/chat/NearbyChatRoom";
@@ -65,7 +65,7 @@ export default config({
         /**
          * 帧同步游戏房间
          */
-        gameServer.define('game_room', GameRoom, {
+        gameServer.define('game_room', GameRoomExample, {
             fps: 20, // 帧率
             recordFrames: false, // 是否记录帧数据
         });
