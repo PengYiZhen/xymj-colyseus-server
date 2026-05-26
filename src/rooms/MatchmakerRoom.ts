@@ -5,6 +5,7 @@ import { RequireAuth } from "../utils/decorators/RequireAuth";
 import { MatchmakingService } from "../services/matchmaking/MatchmakingService";
 import type { MatchFindRequest, PartyCreateRequest, PartyJoinRequest } from "../services/matchmaking/types";
 import { buildPartyMemberFromPayload, normalizeUserId, sameUserId, toPartyMemberView } from "../services/matchmaking/partyUser";
+import { resolveGameRoomName } from "../services/matchmaking/resolveGameRoomName";
 import RedisClient from "../utils/redis";
 
 type SessionUser = {
@@ -55,12 +56,17 @@ export class MatchmakerRoom extends Room {
       const modeId = String(message?.modeId || "default");
       const playersPerMatch = clampInt(message?.playersPerMatch, 2, 100);
       const region = message?.region ? String(message.region) : undefined;
+      const gameRoomName = resolveGameRoomName({
+        gameRoomName: message?.gameRoomName,
+        modeId,
+      });
 
       const { queueKey, ticketId } = await this.mm.enqueue({
         userId: user.userId,
         sessionId: client.sessionId,
         username: user.username,
         modeId,
+        gameRoomName,
         playersPerMatch,
         region,
         skill: message?.skill,
@@ -96,6 +102,10 @@ export class MatchmakerRoom extends Room {
       const modeId = String(message?.modeId || "default");
       const playersPerMatch = clampInt(message?.playersPerMatch, 2, 100);
       const region = message?.region ? String(message.region) : undefined;
+      const gameRoomName = resolveGameRoomName({
+        gameRoomName: message?.gameRoomName,
+        modeId,
+      });
 
       const partyId = crypto.randomUUID();
       const partyCode = randomCode(6);
@@ -105,6 +115,7 @@ export class MatchmakerRoom extends Room {
           partyId,
           partyCode,
           modeId,
+          gameRoomName,
           playersPerMatch,
           region,
           leaderUserId: user.userId,
@@ -117,6 +128,7 @@ export class MatchmakerRoom extends Room {
         partyId,
         partyCode,
         modeId,
+        gameRoomName,
         playersPerMatch,
         region,
         leaderUserId: user.userId,
@@ -318,7 +330,7 @@ export class MatchmakerRoom extends Room {
     const match = await this.mm.tryFormMatch(queueKey, playersPerMatch);
     if (!match) return;
 
-    const roomName = "game_room";
+    const roomName = match.gameRoomName || resolveGameRoomName({ modeId: "default" });
     try {
       const room = await matchMaker.createRoom(roomName, {
         fps: 20,
@@ -326,6 +338,7 @@ export class MatchmakerRoom extends Room {
         matchId: match.matchId,
         playersPerMatch,
         queueKey,
+        modeId: match.modeId,
       });
 
       await this.mm.updateMatchRoom(match.matchId, roomName, room.roomId);
@@ -377,7 +390,9 @@ export class MatchmakerRoom extends Room {
     }
 
     const matchId = crypto.randomUUID();
-    const roomName = "game_room";
+    const roomName =
+      party.gameRoomName ||
+      resolveGameRoomName({ modeId: party.modeId });
 
     try {
       const room = await matchMaker.createRoom(roomName, {
@@ -386,6 +401,7 @@ export class MatchmakerRoom extends Room {
         matchId,
         playersPerMatch: party.playersPerMatch,
         partyId,
+        modeId: party.modeId,
       });
 
       const participants = members.slice(0, party.playersPerMatch);

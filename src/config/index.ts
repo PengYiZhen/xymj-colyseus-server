@@ -60,6 +60,12 @@ export interface AppConfig {
     lazyConnect: boolean;
   };
   
+  // 匹配组局：modeId / gameRoomName -> 对局房间类型（app.config 中 define 的名字）
+  matchmaking: {
+    defaultGameRoomName: string;
+    modeGameRoomMap: Record<string, string>;
+  };
+
   // Colyseus 配置
   colyseus: {
     /** 预留：全局限流等场景可用；单房间上限请用 chatRoomMaxClients */
@@ -93,6 +99,23 @@ export interface AppConfig {
       description: string;
     }>;
   };
+}
+
+function parseModeGameRoomMap(): Record<string, string> {
+  const raw = process.env.MATCH_MODE_GAME_ROOM_MAP;
+  if (!raw?.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string" && v.trim()) out[String(k)] = v.trim();
+    }
+    return out;
+  } catch {
+    console.warn("[config] MATCH_MODE_GAME_ROOM_MAP 不是合法 JSON，已忽略");
+    return {};
+  }
 }
 
 /**
@@ -157,6 +180,11 @@ const config: AppConfig = {
     lazyConnect: process.env.REDIS_LAZY_CONNECT === 'true',
   },
   
+  matchmaking: {
+    defaultGameRoomName: process.env.MATCH_DEFAULT_GAME_ROOM?.trim() || "game_room",
+    modeGameRoomMap: parseModeGameRoomMap(),
+  },
+
   // Colyseus 游戏服务器配置
   colyseus: {
     maxClients: parseInt(process.env.COLYSEUS_MAX_CLIENTS || '100', 10),

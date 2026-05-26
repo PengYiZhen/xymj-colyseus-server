@@ -11,6 +11,8 @@ export interface QueueTicket {
   sessionId: string;
   username?: string;
   modeId: string;
+  /** 组局后 createRoom 使用的房间类型名 */
+  gameRoomName: string;
   playersPerMatch: number;
   region?: string;
   skill?: number;
@@ -22,6 +24,7 @@ export interface PartyInfo {
   partyId: string;
   partyCode: string;
   modeId: string;
+  gameRoomName: string;
   playersPerMatch: number;
   region?: string;
   leaderUserId: string;
@@ -38,6 +41,8 @@ export interface PartyMemberInfo {
 export interface MatchInfo {
   matchId: string;
   queueKey: string;
+  modeId: string;
+  gameRoomName: string;
   createdAtMs: number;
   players: Array<{
     userId: string;
@@ -145,9 +150,14 @@ return ids
 
       const matchId = crypto.randomUUID();
       const createdAtMs = Date.now();
+      const gameRoomName = players[0]?.gameRoomName || "game_room";
+      const modeId = players[0]?.modeId || "default";
+
       const match: MatchInfo = {
         matchId,
         queueKey,
+        modeId,
+        gameRoomName,
         createdAtMs,
         status: "created",
         players: players.map((p, idx) => ({
