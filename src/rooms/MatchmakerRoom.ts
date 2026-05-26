@@ -220,6 +220,7 @@ export class MatchmakerRoom extends Room {
     void this.setupNotifyBridge();
   }
 
+  @RequireAuth()
   onJoin(client: Client, options: any) {
     // RequireAuth 会把 userId/username 写入 options
     const demoUserIdRaw = options?.demoUserId ? String(options.demoUserId).trim() : "";
