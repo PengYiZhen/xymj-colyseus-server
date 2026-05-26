@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import RedisClient from "../../utils/redis";
+import { normalizePartyMemberInfo } from "./partyUser";
 
 export interface QueueTicket {
   userId: string;
@@ -25,8 +26,9 @@ export interface PartyInfo {
 
 export interface PartyMemberInfo {
   userId: string;
-  username?: string;
   joinedAtMs: number;
+  /** 客户端传入的任意展示字段，原样持久化与广播 */
+  profile?: Record<string, unknown>;
 }
 
 export interface MatchInfo {
@@ -183,17 +185,14 @@ return ids
     await client.set(`mm:match:${matchId}`, JSON.stringify(match), "EX", 60 * 10);
   }
 
-  async createParty(params: PartyInfo): Promise<void> {
+  async createParty(params: PartyInfo, leaderMember: PartyMemberInfo): Promise<void> {
     const client = await this.getRawRedis();
     await client.set(`mm:party:${params.partyId}`, JSON.stringify(params), "EX", 60 * 30);
     await client.sadd(`mm:party:${params.partyId}:members`, params.leaderUserId);
     await client.hset(
       `mm:party:${params.partyId}:memberInfo`,
       params.leaderUserId,
-      JSON.stringify({
-        userId: params.leaderUserId,
-        joinedAtMs: Date.now(),
-      })
+      JSON.stringify(leaderMember)
     );
     await client.expire(`mm:party:${params.partyId}:members`, 60 * 30);
     await client.expire(`mm:party:${params.partyId}:memberInfo`, 60 * 30);
@@ -229,7 +228,8 @@ return ids
     const out: PartyMemberInfo[] = [];
     for (const v of Object.values(raw)) {
       try {
-        out.push(JSON.parse(v) as PartyMemberInfo);
+        const parsed = normalizePartyMemberInfo(JSON.parse(v));
+        if (parsed) out.push(parsed);
       } catch {
         // ignore
       }

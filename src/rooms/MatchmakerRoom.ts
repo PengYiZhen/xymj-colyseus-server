@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { RequireAuth } from "../utils/decorators/RequireAuth";
 import { MatchmakingService } from "../services/matchmaking/MatchmakingService";
 import type { MatchFindRequest, PartyCreateRequest, PartyJoinRequest } from "../services/matchmaking/types";
+import { buildPartyMemberFromPayload, toPartyMemberView } from "../services/matchmaking/partyUser";
 import RedisClient from "../utils/redis";
 
 type SessionUser = {
@@ -98,15 +99,19 @@ export class MatchmakerRoom extends Room {
 
       const partyId = crypto.randomUUID();
       const partyCode = randomCode(6);
-      await this.mm.createParty({
-        partyId,
-        partyCode,
-        modeId,
-        playersPerMatch,
-        region,
-        leaderUserId: user.userId,
-        createdAtMs: Date.now(),
-      });
+      const leaderMember = buildPartyMemberFromPayload(user, message?.user);
+      await this.mm.createParty(
+        {
+          partyId,
+          partyCode,
+          modeId,
+          playersPerMatch,
+          region,
+          leaderUserId: user.userId,
+          createdAtMs: Date.now(),
+        },
+        leaderMember
+      );
       user.partyId = partyId;
       client.send("party:created", {
         partyId,
@@ -116,6 +121,7 @@ export class MatchmakerRoom extends Room {
         region,
         leaderUserId: user.userId,
         isLeader: true,
+        members: [toPartyMemberView(leaderMember)],
       });
     });
 
@@ -138,13 +144,11 @@ export class MatchmakerRoom extends Room {
         return;
       }
 
-      const count = await this.mm.addPartyMember(partyId, {
-        userId: user.userId,
-        username: user.username,
-        joinedAtMs: Date.now(),
-      });
+      const member = buildPartyMemberFromPayload(user, message?.user);
+      const count = await this.mm.addPartyMember(partyId, member);
       user.partyId = partyId;
 
+      const members = await this.mm.getPartyMemberInfos(partyId);
       const isLeader = party.leaderUserId === user.userId;
       client.send("party:joined", {
         partyId,
@@ -153,6 +157,7 @@ export class MatchmakerRoom extends Room {
         playersPerMatch: party.playersPerMatch,
         leaderUserId: party.leaderUserId,
         isLeader,
+        members: members.map(toPartyMemberView),
       });
 
       // 广播 party 状态给当前在线成员（用于前端更新人数/房主标识）
@@ -340,17 +345,19 @@ export class MatchmakerRoom extends Room {
   private async broadcastPartyUpdate(partyId: string) {
     const party = await this.mm.getParty(partyId);
     if (!party) return;
-    const members = await this.mm.getPartyMembers(partyId);
-    const count = members.length;
-    for (const userId of members) {
-      const targetClient = this.findClientByUserId(userId);
+    const memberInfos = await this.mm.getPartyMemberInfos(partyId);
+    const members = memberInfos.map(toPartyMemberView);
+    const count = memberInfos.length;
+    for (const m of memberInfos) {
+      const targetClient = this.findClientByUserId(m.userId);
       if (!targetClient) continue;
       targetClient.send("party:update", {
         partyId,
         count,
         playersPerMatch: party.playersPerMatch,
         leaderUserId: party.leaderUserId,
-        isLeader: party.leaderUserId === userId,
+        isLeader: party.leaderUserId === m.userId,
+        members,
       });
     }
   }

@@ -431,7 +431,7 @@
           partyState.leaderUserId = String(msg.leaderUserId || "");
           partyState.isLeader = !!msg.isLeader;
           setEnabled("btnPartyStart", partyState.isLeader);
-          log(`party:created code=${msg.partyCode} target=${msg.playersPerMatch}`);
+          log(`party:created code=${msg.partyCode} members=${(msg.members || []).length}`);
         });
         mmRoom.onMessage("party:joined", (msg) => {
           $("partyId").textContent = msg.partyId || "-";
@@ -444,7 +444,7 @@
           partyState.leaderUserId = String(msg.leaderUserId || "");
           partyState.isLeader = !!msg.isLeader;
           setEnabled("btnPartyStart", partyState.isLeader);
-          log(`party:joined count=${msg.count}/${msg.playersPerMatch}`);
+          log(`party:joined count=${msg.count}/${msg.playersPerMatch} members=${(msg.members || []).length}`);
         });
         mmRoom.onMessage("party:update", (msg) => {
           $("partyId").textContent = msg.partyId || "-";
@@ -456,7 +456,7 @@
           partyState.leaderUserId = String(msg.leaderUserId || "");
           partyState.isLeader = !!msg.isLeader;
           setEnabled("btnPartyStart", partyState.isLeader);
-          log(`party:update count=${msg.count}/${msg.playersPerMatch} isLeader=${partyState.isLeader}`);
+          log(`party:update count=${msg.count}/${msg.playersPerMatch} members=${(msg.members || []).length} isLeader=${partyState.isLeader}`);
         });
         mmRoom.onMessage("party:left", (msg) => log(`party:left ok=${!!msg.ok}`));
         mmRoom.onMessage("party:error", (msg) => log(`party:error ${msg.message || JSON.stringify(msg)}`));
@@ -511,6 +511,17 @@
       return payload;
     }
 
+    /** 演示：user 为任意 JSON 字段，业务自定；服务端原样存储并在 members 里广播 */
+    function buildDemoPartyUser() {
+      const demoUserId = ($("demoUserId") ? $("demoUserId").value.trim() : "");
+      return {
+        nickname: demoUserId ? `昵称-${demoUserId}` : "演示昵称",
+        avatar: "",
+        level: 1,
+        power: 1000,
+      };
+    }
+
     function startActiveMatch() {
       if (!mmRoom) return alert("请先连接 matchmaker_room");
       const payload = buildMatchParams();
@@ -526,7 +537,7 @@
 
     function partyCreate() {
       if (!mmRoom) return alert("请先连接 matchmaker_room");
-      const payload = buildMatchParams();
+      const payload = { ...buildMatchParams(), user: buildDemoPartyUser() };
       mmRoom.send("party:create", payload);
       log("send party:create " + JSON.stringify(payload));
     }
@@ -535,8 +546,9 @@
       if (!mmRoom) return alert("请先连接 matchmaker_room");
       const partyCode = ($("partyCode").value || "").trim();
       if (!partyCode) return alert("请输入 partyCode");
-      mmRoom.send("party:join", { partyCode });
-      log("send party:join " + partyCode);
+      const payload = { partyCode, user: buildDemoPartyUser() };
+      mmRoom.send("party:join", payload);
+      log("send party:join " + JSON.stringify(payload));
     }
 
     function partyLeave() {

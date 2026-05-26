@@ -1,6 +1,6 @@
 /**
  * 自动导出所有控制器
- * ⚠️ 此文件由 scripts/watch-controllers.mjs 自动生成
+ * ⚠️ 此文件由 scripts/generate-controllers.mjs 自动生成
  * 请勿手动修改！
  * 
  * 新增控制器时，只需在 controllers 目录下创建 *Controller.ts 文件
