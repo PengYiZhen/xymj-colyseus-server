@@ -6,6 +6,20 @@ type SessionLike = {
   username?: string;
 };
 
+/** 统一 userId 字符串化，避免 number / "undefined" 导致 === 比较失败 */
+export function normalizeUserId(raw: unknown): string {
+  if (raw === undefined || raw === null) return "";
+  const s = String(raw).trim();
+  if (!s || s === "undefined" || s === "null") return "";
+  return s;
+}
+
+export function sameUserId(a: unknown, b: unknown): boolean {
+  const left = normalizeUserId(a);
+  const right = normalizeUserId(b);
+  return !!left && left === right;
+}
+
 const RESERVED_MEMBER_KEYS = new Set(["userId", "joinedAtMs", "profile"]);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -15,7 +29,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 /** 从 Redis 反序列化，兼容旧版扁平字段 */
 export function normalizePartyMemberInfo(raw: unknown): PartyMemberInfo | null {
   if (!isPlainObject(raw)) return null;
-  const userId = String(raw.userId ?? "").trim();
+  const userId = normalizeUserId(raw.userId);
   if (!userId) return null;
   const joinedAtMs =
     typeof raw.joinedAtMs === "number" && Number.isFinite(raw.joinedAtMs)
@@ -49,7 +63,7 @@ export function buildPartyMemberFromPayload(
   }
 
   return {
-    userId: session.userId,
+    userId: normalizeUserId(session.userId),
     joinedAtMs,
     profile: Object.keys(profile).length ? profile : undefined,
   };

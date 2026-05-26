@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { RequireAuth } from "../utils/decorators/RequireAuth";
 import { MatchmakingService } from "../services/matchmaking/MatchmakingService";
 import type { MatchFindRequest, PartyCreateRequest, PartyJoinRequest } from "../services/matchmaking/types";
-import { buildPartyMemberFromPayload, toPartyMemberView } from "../services/matchmaking/partyUser";
+import { buildPartyMemberFromPayload, normalizeUserId, sameUserId, toPartyMemberView } from "../services/matchmaking/partyUser";
 import RedisClient from "../utils/redis";
 
 type SessionUser = {
@@ -145,15 +145,22 @@ export class MatchmakerRoom extends Room {
       }
 
       const member = buildPartyMemberFromPayload(user, message?.user);
-      const count = await this.mm.addPartyMember(partyId, member);
+      const joinResult = await this.mm.addPartyMember(partyId, member, party.playersPerMatch);
+      if (!joinResult.ok) {
+        client.send("party:error", {
+          message: `房间已满（${joinResult.count}/${party.playersPerMatch}）`,
+        });
+        return;
+      }
+
       user.partyId = partyId;
 
       const members = await this.mm.getPartyMemberInfos(partyId);
-      const isLeader = party.leaderUserId === user.userId;
+      const isLeader = sameUserId(party.leaderUserId, user.userId);
       client.send("party:joined", {
         partyId,
         partyCode,
-        count,
+        count: joinResult.count,
         playersPerMatch: party.playersPerMatch,
         leaderUserId: party.leaderUserId,
         isLeader,
@@ -172,10 +179,19 @@ export class MatchmakerRoom extends Room {
       }
       const partyId = user.partyId;
       user.partyId = undefined;
+      const party = await this.mm.getParty(partyId);
+      const wasLeader = party ? sameUserId(party.leaderUserId, user.userId) : false;
       const remaining = await this.mm.removePartyMember(partyId, user.userId);
       if (remaining <= 0) {
         await this.mm.closeParty(partyId);
       } else {
+        if (wasLeader) {
+          const members = await this.mm.getPartyMemberInfos(partyId);
+          const nextLeader = members[0]?.userId;
+          if (nextLeader) {
+            await this.mm.updatePartyLeader(partyId, nextLeader);
+          }
+        }
         await this.broadcastPartyUpdate(partyId);
       }
       client.send("party:left", { ok: true });
@@ -188,26 +204,44 @@ export class MatchmakerRoom extends Room {
         return;
       }
 
-      const party = await this.mm.getParty(user.partyId);
-      if (!party) {
-        client.send("party:error", { message: "房间已关闭或过期" });
-        return;
-      }
+      const partyId = user.partyId;
 
-      if (party.leaderUserId !== user.userId) {
-        client.send("party:error", { message: "只有房主可以开始游戏" });
-        return;
-      }
+      try {
+        const party = await this.mm.getParty(partyId);
+        if (!party) {
+          user.partyId = undefined;
+          client.send("party:error", { message: "房间已关闭或过期" });
+          return;
+        }
 
-      const members = await this.mm.getPartyMemberInfos(user.partyId);
-      if (members.length < party.playersPerMatch) {
-        client.send("party:error", {
-          message: `人数不足，当前 ${members.length}/${party.playersPerMatch}`,
-        });
-        return;
-      }
+        if (!sameUserId(party.leaderUserId, user.userId)) {
+          client.send("party:error", { message: "只有房主可以开始游戏" });
+          return;
+        }
 
-      await this.startMatchFromParty(user.partyId);
+        const inParty = await this.mm.isPartyMember(partyId, user.userId);
+        if (!inParty) {
+          user.partyId = undefined;
+          client.send("party:error", { message: "你不在房间成员列表中，请重新加入" });
+          return;
+        }
+
+        const members = await this.mm.getPartyMemberInfos(partyId);
+        if (members.length < party.playersPerMatch) {
+          client.send("party:error", {
+            message: `人数不足，当前 ${members.length}/${party.playersPerMatch}`,
+          });
+          return;
+        }
+
+        const ok = await this.startMatchFromParty(partyId);
+        if (!ok) {
+          return;
+        }
+      } catch (e: any) {
+        console.error("[MatchmakerRoom] party:start 失败:", e?.message || e);
+        this.notifyPartyError(partyId, "开局失败，请稍后重试");
+      }
     });
 
     // 定时扫：避免“只入队但没人触发 tryMatch”
@@ -229,7 +263,10 @@ export class MatchmakerRoom extends Room {
   onJoin(client: Client, options: any) {
     // RequireAuth 会把 userId/username 写入 options
     const demoUserIdRaw = options?.demoUserId ? String(options.demoUserId).trim() : "";
-    const effectiveUserId = demoUserIdRaw || String(options.userId);
+    const effectiveUserId = demoUserIdRaw || normalizeUserId(options.userId);
+    if (!effectiveUserId) {
+      throw new Error("userId 无效");
+    }
     this.users.set(client.sessionId, {
       userId: effectiveUserId,
       demoUserId: demoUserIdRaw || undefined,
@@ -244,11 +281,21 @@ export class MatchmakerRoom extends Room {
       await this.mm.cancelEnqueue(user.queueKey, user.ticketId);
     }
     if (user?.partyId) {
-      const remaining = await this.mm.removePartyMember(user.partyId, user.userId);
+      const partyId = user.partyId;
+      const party = await this.mm.getParty(partyId);
+      const wasLeader = party ? sameUserId(party.leaderUserId, user.userId) : false;
+      const remaining = await this.mm.removePartyMember(partyId, user.userId);
       if (remaining > 0) {
-        await this.broadcastPartyUpdate(user.partyId);
+        if (wasLeader) {
+          const members = await this.mm.getPartyMemberInfos(partyId);
+          const nextLeader = members[0]?.userId;
+          if (nextLeader) {
+            await this.mm.updatePartyLeader(partyId, nextLeader);
+          }
+        }
+        await this.broadcastPartyUpdate(partyId);
       } else {
-        await this.mm.closeParty(user.partyId);
+        await this.mm.closeParty(partyId);
       }
     }
     this.users.delete(client.sessionId);
@@ -271,75 +318,111 @@ export class MatchmakerRoom extends Room {
     const match = await this.mm.tryFormMatch(queueKey, playersPerMatch);
     if (!match) return;
 
-    // 创建对局房（复用 game_room）
     const roomName = "game_room";
-    const room = await matchMaker.createRoom(roomName, {
-      fps: 20,
-      recordFrames: false,
-      matchId: match.matchId,
-      playersPerMatch,
-      queueKey,
-    });
-
-    await this.mm.updateMatchRoom(match.matchId, roomName, room.roomId);
-
-    const notifications = match.players.map((p) => ({
-      userId: p.userId,
-      sessionId: p.sessionId,
-      payload: {
-        roomName,
-        roomId: room.roomId,
+    try {
+      const room = await matchMaker.createRoom(roomName, {
+        fps: 20,
+        recordFrames: false,
         matchId: match.matchId,
-        seatIndex: p.seatIndex,
-        reconnectKey: p.reconnectKey,
-        joinOptions: {
+        playersPerMatch,
+        queueKey,
+      });
+
+      await this.mm.updateMatchRoom(match.matchId, roomName, room.roomId);
+
+      const notifications = match.players.map((p) => ({
+        userId: p.userId,
+        sessionId: p.sessionId,
+        payload: {
+          roomName,
+          roomId: room.roomId,
           matchId: match.matchId,
           seatIndex: p.seatIndex,
           reconnectKey: p.reconnectKey,
+          joinOptions: {
+            matchId: match.matchId,
+            seatIndex: p.seatIndex,
+            reconnectKey: p.reconnectKey,
+          },
         },
-      },
-    }));
+      }));
 
-    // 本实例直发 + Redis Pub/Sub 广播（跨实例转发到在线用户）
-    this.deliverNotifications(notifications);
-    await this.publishNotify({ originRoomId: this.roomId, type: "match:found", notifications });
+      this.deliverNotifications(notifications);
+      await this.publishNotify({ originRoomId: this.roomId, type: "match:found", notifications });
+    } catch (e: any) {
+      console.error("[MatchmakerRoom] tryMatch createRoom 失败:", e?.message || e);
+      for (const p of match.players) {
+        const targetClient =
+          this.clients.find((c) => c.sessionId === p.sessionId) ||
+          this.findClientByUserId(p.userId);
+        targetClient?.send("match:error", { message: "组局失败，请重新匹配" });
+      }
+    }
   }
 
-  private async startMatchFromParty(partyId: string) {
+  private async startMatchFromParty(partyId: string): Promise<boolean> {
     const party = await this.mm.getParty(partyId);
-    if (!party) return;
+    if (!party) {
+      this.notifyPartyError(partyId, "房间已关闭或过期");
+      return false;
+    }
 
     const members = await this.mm.getPartyMemberInfos(partyId);
-    if (members.length < party.playersPerMatch) return;
+    if (members.length < party.playersPerMatch) {
+      this.notifyPartyError(
+        partyId,
+        `人数不足，当前 ${members.length}/${party.playersPerMatch}`
+      );
+      return false;
+    }
 
     const matchId = crypto.randomUUID();
     const roomName = "game_room";
-    const room = await matchMaker.createRoom(roomName, {
-      fps: 20,
-      recordFrames: false,
-      matchId,
-      playersPerMatch: party.playersPerMatch,
-      partyId,
-    });
 
-    // 通知 party 内在线用户加入
-    const notifications = members.slice(0, party.playersPerMatch).map((m, i) => ({
-      userId: m.userId,
-      sessionId: this.findSessionIdByUserId(m.userId) || "",
-      payload: {
-        roomName,
-        roomId: room.roomId,
+    try {
+      const room = await matchMaker.createRoom(roomName, {
+        fps: 20,
+        recordFrames: false,
         matchId,
-        seatIndex: i,
-        reconnectKey: crypto.randomUUID(),
-        joinOptions: { matchId, seatIndex: i, partyId },
-      },
-    }));
+        playersPerMatch: party.playersPerMatch,
+        partyId,
+      });
 
-    this.deliverNotifications(notifications);
-    await this.publishNotify({ originRoomId: this.roomId, type: "match:found", notifications });
+      const participants = members.slice(0, party.playersPerMatch);
+      const notifications = participants.map((m, i) => ({
+        userId: m.userId,
+        sessionId: this.findSessionIdByUserId(m.userId) || "",
+        payload: {
+          roomName,
+          roomId: room.roomId,
+          matchId,
+          seatIndex: i,
+          reconnectKey: crypto.randomUUID(),
+          joinOptions: { matchId, seatIndex: i, partyId },
+        },
+      }));
 
-    await this.mm.closeParty(partyId);
+      this.deliverNotifications(notifications);
+      await this.publishNotify({ originRoomId: this.roomId, type: "match:found", notifications });
+
+      await this.mm.closeParty(partyId);
+      for (const u of this.users.values()) {
+        if (u.partyId === partyId) u.partyId = undefined;
+      }
+      return true;
+    } catch (e: any) {
+      console.error("[MatchmakerRoom] startMatchFromParty createRoom 失败:", e?.message || e);
+      this.notifyPartyError(partyId, "开局失败，请稍后重试");
+      return false;
+    }
+  }
+
+  private notifyPartyError(partyId: string, message: string) {
+    for (const u of this.users.values()) {
+      if (u.partyId !== partyId) continue;
+      const targetClient = this.findClientByUserId(u.userId);
+      targetClient?.send("party:error", { message });
+    }
   }
 
   private async broadcastPartyUpdate(partyId: string) {
@@ -356,7 +439,7 @@ export class MatchmakerRoom extends Room {
         count,
         playersPerMatch: party.playersPerMatch,
         leaderUserId: party.leaderUserId,
-        isLeader: party.leaderUserId === m.userId,
+        isLeader: sameUserId(party.leaderUserId, m.userId),
         members,
       });
     }
@@ -364,7 +447,7 @@ export class MatchmakerRoom extends Room {
 
   private findClientByUserId(userId: string): Client | null {
     for (const [sessionId, u] of this.users.entries()) {
-      if (u.userId === userId) {
+      if (sameUserId(u.userId, userId)) {
         return this.clients.find((c) => c.sessionId === sessionId) || null;
       }
     }
@@ -447,7 +530,7 @@ export class MatchmakerRoom extends Room {
 
   private findSessionIdByUserId(userId: string): string | null {
     for (const [sessionId, u] of this.users.entries()) {
-      if (u.userId === userId) return sessionId;
+      if (sameUserId(u.userId, userId)) return sessionId;
     }
     return null;
   }

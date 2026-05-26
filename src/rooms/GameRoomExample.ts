@@ -7,6 +7,9 @@ import RedisClient from "../utils/redis";
 
 /**
  * 游戏房间示例 - 使用帧同步
+ *
+ * 鉴权策略：onCreate 不鉴权（服务端 matchMaker.createRoom 可信调用），onJoin 鉴权（玩家各自带 token 进房）。
+ * 与业务自定义房间若 onCreate 也鉴权、需传 leaderToken 的模式不同，框架示例采用此分工。
  */
 export class GameRoomExample extends FrameSyncRoom<MyRoomState> {
   maxClients = 4;

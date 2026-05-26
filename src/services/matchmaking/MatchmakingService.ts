@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import RedisClient from "../../utils/redis";
-import { normalizePartyMemberInfo } from "./partyUser";
+import { normalizePartyMemberInfo, normalizeUserId } from "./partyUser";
+
+export type AddPartyMemberResult =
+  | { ok: true; count: number; added: boolean }
+  | { ok: false; reason: "full"; count: number };
 
 export interface QueueTicket {
   userId: string;
@@ -187,16 +191,20 @@ return ids
 
   async createParty(params: PartyInfo, leaderMember: PartyMemberInfo): Promise<void> {
     const client = await this.getRawRedis();
-    await client.set(`mm:party:${params.partyId}`, JSON.stringify(params), "EX", 60 * 30);
-    await client.sadd(`mm:party:${params.partyId}:members`, params.leaderUserId);
+    const leaderUserId = normalizeUserId(params.leaderUserId);
+    const party = { ...params, leaderUserId };
+    const leader = { ...leaderMember, userId: leaderUserId };
+
+    await client.set(`mm:party:${party.partyId}`, JSON.stringify(party), "EX", 60 * 30);
+    await client.sadd(`mm:party:${party.partyId}:members`, leaderUserId);
     await client.hset(
-      `mm:party:${params.partyId}:memberInfo`,
-      params.leaderUserId,
-      JSON.stringify(leaderMember)
+      `mm:party:${party.partyId}:memberInfo`,
+      leaderUserId,
+      JSON.stringify(leader)
     );
-    await client.expire(`mm:party:${params.partyId}:members`, 60 * 30);
-    await client.expire(`mm:party:${params.partyId}:memberInfo`, 60 * 30);
-    await client.set(`mm:partyCode:${params.partyCode}`, params.partyId, "EX", 60 * 30);
+    await client.expire(`mm:party:${party.partyId}:members`, 60 * 30);
+    await client.expire(`mm:party:${party.partyId}:memberInfo`, 60 * 30);
+    await client.set(`mm:partyCode:${party.partyCode}`, party.partyId, "EX", 60 * 30);
   }
 
   async getPartyIdByCode(partyCode: string): Promise<string | null> {
@@ -215,11 +223,51 @@ return ids
     }
   }
 
-  async addPartyMember(partyId: string, member: PartyMemberInfo): Promise<number> {
+  async addPartyMember(
+    partyId: string,
+    member: PartyMemberInfo,
+    maxMembers: number
+  ): Promise<AddPartyMemberResult> {
     const client = await this.getRawRedis();
-    await client.sadd(`mm:party:${partyId}:members`, member.userId);
-    await client.hset(`mm:party:${partyId}:memberInfo`, member.userId, JSON.stringify(member));
-    return await client.scard(`mm:party:${partyId}:members`);
+    const membersKey = `mm:party:${partyId}:members`;
+    const infoKey = `mm:party:${partyId}:memberInfo`;
+    const userId = normalizeUserId(member.userId);
+    const cap = clampInt(maxMembers, 2, 100);
+
+    const isMember = await client.sismember(membersKey, userId);
+    if (isMember) {
+      await client.hset(infoKey, userId, JSON.stringify({ ...member, userId }));
+      const count = await client.scard(membersKey);
+      return { ok: true, count, added: false };
+    }
+
+    const count = await client.scard(membersKey);
+    if (count >= cap) {
+      return { ok: false, reason: "full", count };
+    }
+
+    await client.sadd(membersKey, userId);
+    await client.hset(infoKey, userId, JSON.stringify({ ...member, userId }));
+    return { ok: true, count: count + 1, added: true };
+  }
+
+  async updatePartyLeader(partyId: string, newLeaderUserId: string): Promise<boolean> {
+    const party = await this.getParty(partyId);
+    if (!party) return false;
+    const leaderUserId = normalizeUserId(newLeaderUserId);
+    if (!leaderUserId) return false;
+
+    party.leaderUserId = leaderUserId;
+    const client = await this.getRawRedis();
+    await client.set(`mm:party:${partyId}`, JSON.stringify(party), "EX", 60 * 30);
+    return true;
+  }
+
+  async isPartyMember(partyId: string, userId: string): Promise<boolean> {
+    const client = await this.getRawRedis();
+    const id = normalizeUserId(userId);
+    if (!id) return false;
+    return (await client.sismember(`mm:party:${partyId}:members`, id)) === 1;
   }
 
   async getPartyMemberInfos(partyId: string): Promise<PartyMemberInfo[]> {
@@ -241,8 +289,9 @@ return ids
 
   async removePartyMember(partyId: string, userId: string): Promise<number> {
     const client = await this.getRawRedis();
-    await client.srem(`mm:party:${partyId}:members`, userId);
-    await client.hdel(`mm:party:${partyId}:memberInfo`, userId);
+    const id = normalizeUserId(userId);
+    await client.srem(`mm:party:${partyId}:members`, id);
+    await client.hdel(`mm:party:${partyId}:memberInfo`, id);
     return await client.scard(`mm:party:${partyId}:members`);
   }
 

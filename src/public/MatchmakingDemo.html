@@ -418,7 +418,7 @@
           log(`match:queued queueKey=${msg.queueKey}`);
         });
         mmRoom.onMessage("match:cancelled", (msg) => log(`match:cancelled ok=${!!msg.ok}`));
-        mmRoom.onMessage("match:error", (msg) => log(`match:error ${JSON.stringify(msg)}`));
+        mmRoom.onMessage("match:error", (msg) => log(`match:error ${msg.message || JSON.stringify(msg)}`));
 
         mmRoom.onMessage("party:created", (msg) => {
           $("partyId").textContent = msg.partyId || "-";
