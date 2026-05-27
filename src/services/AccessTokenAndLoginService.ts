@@ -3,6 +3,7 @@ import { DouYinConfig, WeiXinConfig } from "../config/minigame";
 import RedisClient from "../utils/redis";
 import JWTUtil from "../utils/jwt";
 import config from "../config";
+import { parseExpiresInToSeconds } from "../utils/parseExpiresIn";
 import { AuthService } from "./AuthService";
 import { User } from "../models/User";
 
@@ -60,34 +61,6 @@ export class AccessTokenAndLoginService {
     private readonly DOUYIN_TOKEN_KEY = "douyin_access_token";
     private readonly WEIXIN_TOKEN_KEY = "weixin_access_token";
     private readonly authService = new AuthService();
-
-    /**
-     * 将JWT过期时间字符串转换为秒数
-     * 支持格式: '1h', '24h', '7d', '3600' (秒)
-     */
-    private parseExpiresInToSeconds(expiresIn: string): number {
-        // 如果是纯数字，直接返回
-        if (/^\d+$/.test(expiresIn)) {
-            return parseInt(expiresIn, 10);
-        }
-        
-        // 解析带单位的字符串
-        const match = expiresIn.match(/^(\d+)([smhd])$/);
-        if (!match) {
-            return 3600; // 默认1小时
-        }
-        
-        const value = parseInt(match[1], 10);
-        const unit = match[2];
-        
-        switch (unit) {
-            case 's': return value;
-            case 'm': return value * 60;
-            case 'h': return value * 60 * 60;
-            case 'd': return value * 24 * 60 * 60;
-            default: return 3600;
-        }
-    }
 
     constructor() {
         this.douyinAccessTokenUrl = `https://minigame.zijieapi.com/mgplatform/api/apps/v2/token`;
@@ -241,14 +214,14 @@ export class AccessTokenAndLoginService {
 
                 jwtToken = tokens.accessToken;
 
-                const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+                const refreshTokenExpire = parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
                 await this.redis.set(
                     `refresh_token:${dbUser.id}`,
                     tokens.refreshToken,
                     refreshTokenExpire
                 );
 
-                const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
+                const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
                 await this.redis.set(
                     `access_token:${dbUser.id}`,
                     tokens.accessToken,
@@ -322,14 +295,14 @@ export class AccessTokenAndLoginService {
 
                 jwtToken = tokens.accessToken;
 
-                const refreshTokenExpire = this.parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+                const refreshTokenExpire = parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
                 await this.redis.set(
                     `refresh_token:${dbUser.id}`,
                     tokens.refreshToken,
                     refreshTokenExpire
                 );
 
-                const accessTokenExpire = this.parseExpiresInToSeconds(config.jwt.expiresIn);
+                const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
                 await this.redis.set(
                     `access_token:${dbUser.id}`,
                     tokens.accessToken,

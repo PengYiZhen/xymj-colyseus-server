@@ -7,34 +7,7 @@ import JWTUtil, { TokenPair } from '../utils/jwt';
 import RedisClient from '../utils/redis';
 import { LoginDto, RegisterDto } from '../dto/AuthDto';
 import config from '../config';
-
-/**
- * 将JWT过期时间字符串转换为秒数
- * 支持格式: '1h', '24h', '7d', '3600' (秒)
- */
-function parseExpiresInToSeconds(expiresIn: string): number {
-  // 如果是纯数字，直接返回
-  if (/^\d+$/.test(expiresIn)) {
-    return parseInt(expiresIn, 10);
-  }
-  
-  // 解析带单位的字符串
-  const match = expiresIn.match(/^(\d+)([smhd])$/);
-  if (!match) {
-    return 3600; // 默认1小时
-  }
-  
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  
-  switch (unit) {
-    case 's': return value;
-    case 'm': return value * 60;
-    case 'h': return value * 60 * 60;
-    case 'd': return value * 24 * 60 * 60;
-    default: return 3600;
-  }
-} 
+import { parseExpiresInToSeconds } from '../utils/parseExpiresIn';
 
 export class AuthService {
   private get userRepository(): Repository<User> {
@@ -80,15 +53,16 @@ export class AuthService {
       email: savedUser.email,
     });
 
-    // 将刷新令牌存储到 Redis
+    const refreshTokenExpire = parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+    const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
+
     await this.redis.set(
       `refresh_token:${savedUser.id}`,
       tokens.refreshToken,
-      7 * 24 * 60 * 60 // 7天
+      refreshTokenExpire
     );
 
     // 将访问令牌存储到 Redis（用于房间连接验证）
-    const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
     await this.redis.set(
       `access_token:${savedUser.id}`,
       tokens.accessToken,
@@ -145,15 +119,16 @@ export class AuthService {
       email: user.email,
     });
 
-    // 将刷新令牌存储到 Redis
+    const refreshTokenExpire = parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+    const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
+
     await this.redis.set(
       `refresh_token:${user.id}`,
       tokens.refreshToken,
-      7 * 24 * 60 * 60 // 7天
+      refreshTokenExpire
     );
 
     // 将访问令牌存储到 Redis（用于房间连接验证）
-    const accessTokenExpire = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
     await this.redis.set(
       `access_token:${user.id}`,
       tokens.accessToken,
@@ -258,15 +233,16 @@ export class AuthService {
       email: payload.email,
     });
 
-    // 更新 Redis 中的刷新令牌
+    const refreshTokenExpire = parseExpiresInToSeconds(config.jwt.refreshExpiresIn);
+    const accessTokenExpire = parseExpiresInToSeconds(config.jwt.expiresIn);
+
     await this.redis.set(
       `refresh_token:${payload.userId}`,
       newTokens.refreshToken,
-      7 * 24 * 60 * 60 // 7天
+      refreshTokenExpire
     );
 
     // 更新 Redis 中的访问令牌
-    const accessTokenExpire = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
     await this.redis.set(
       `access_token:${payload.userId}`,
       newTokens.accessToken,
