@@ -128,10 +128,13 @@
       padding: 12px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
       font-size: 12px;
-      white-space: pre-wrap;
       word-break: break-word;
       border: 1px solid rgba(255,255,255,0.10);
     }
+    .log-line { padding: 2px 0; line-height: 1.45; white-space: pre-wrap; }
+    .log-line--error { color: #f87171; font-weight: 600; }
+    .log-line--warn { color: #fbbf24; }
+    .log-line--success { color: #86efac; }
     code { background: rgba(79,70,229,0.08); padding: 2px 6px; border-radius: 8px; }
     .hint { font-size: 12px; color: #6b7280; line-height: 1.65; margin-top: 10px; }
   </style>
@@ -325,11 +328,22 @@
 
     function $(id) { return document.getElementById(id); }
     function now() { return new Date().toLocaleTimeString(); }
-    function log(msg) {
-      const el = $("logBox");
-      el.textContent = `[${now()}] ${msg}\n` + el.textContent;
+    function inferLogType(msg) {
+      const s = String(msg);
+      if (/error|失败|party:error|match:error|异常/i.test(s)) return "error";
+      if (/成功|✅|match:found/i.test(s)) return "success";
+      return "";
     }
-    function clearLog() { $("logBox").textContent = ""; log("日志已清空"); }
+    function log(msg, type) {
+      const el = $("logBox");
+      const line = document.createElement("div");
+      const level = type || inferLogType(msg);
+      line.className = "log-line" + (level ? ` log-line--${level}` : "");
+      line.textContent = `[${now()}] ${msg}`;
+      el.prepend(line);
+    }
+    function logError(msg) { log(msg, "error"); }
+    function clearLog() { $("logBox").innerHTML = ""; log("日志已清空"); }
 
     function persistInputs() {
       localStorage.setItem(LS.serverUrl, $("serverUrl").value.trim());
@@ -409,7 +423,7 @@
         });
 
         mmRoom.onError((code, message) => {
-          log(`matchmaker_room error [${code}]: ${message}`);
+          logError(`matchmaker_room error [${code}]: ${message}`);
         });
 
         mmRoom.onMessage("mm:ready", (msg) => log(`mm:ready sessionId=${msg.sessionId}`));
@@ -418,7 +432,7 @@
           log(`match:queued queueKey=${msg.queueKey}`);
         });
         mmRoom.onMessage("match:cancelled", (msg) => log(`match:cancelled ok=${!!msg.ok}`));
-        mmRoom.onMessage("match:error", (msg) => log(`match:error ${msg.message || JSON.stringify(msg)}`));
+        mmRoom.onMessage("match:error", (msg) => logError(`match:error ${msg.message || JSON.stringify(msg)}`));
 
         mmRoom.onMessage("party:created", (msg) => {
           $("partyId").textContent = msg.partyId || "-";
@@ -459,7 +473,7 @@
           log(`party:update count=${msg.count}/${msg.playersPerMatch} members=${(msg.members || []).length} isLeader=${partyState.isLeader}`);
         });
         mmRoom.onMessage("party:left", (msg) => log(`party:left ok=${!!msg.ok}`));
-        mmRoom.onMessage("party:error", (msg) => log(`party:error ${msg.message || JSON.stringify(msg)}`));
+        mmRoom.onMessage("party:error", (msg) => logError(`party:error ${msg.message || JSON.stringify(msg)}`));
 
         mmRoom.onMessage("match:found", async (msg) => {
           log(`match:found roomId=${msg.roomId} seat=${msg.seatIndex} matchId=${msg.matchId}`);
@@ -488,11 +502,11 @@
           window.location.href = "MatchmakingGame.html";
         });
 
-        log("matchmaker_room 连接成功");
+        log("matchmaker_room 连接成功", "success");
       } catch (e) {
         console.error(e);
         setMmStatus("连接失败");
-        log("连接失败: " + (e.message || e));
+        logError("连接失败: " + (e.message || e));
         alert("连接失败: " + (e.message || e));
       }
     }
@@ -611,7 +625,7 @@
           gameRoom = null;
         });
 
-        gameRoom.onError((code, message) => log(`game_room error [${code}]: ${message}`));
+        gameRoom.onError((code, message) => logError(`game_room error [${code}]: ${message}`));
         gameRoom.onMessage("reconnect:ok", (msg) => log("reconnect:ok " + JSON.stringify(msg)));
         gameRoom.onMessage("playerOffline", (msg) => log("playerOffline " + JSON.stringify(msg)));
         gameRoom.onMessage("playerOnline", (msg) => log("playerOnline " + JSON.stringify(msg)));
@@ -638,7 +652,7 @@
         log("✅ 已加入 game_room");
       } catch (e) {
         console.error(e);
-        log("join game_room 失败: " + (e.message || e));
+        logError("join game_room 失败: " + (e.message || e));
       }
     }
 
@@ -661,7 +675,7 @@
         }
         log("已触发模拟断线");
       } catch (e) {
-        log("模拟断线失败: " + (e.message || e));
+        logError("模拟断线失败: " + (e.message || e));
       }
     }
 
@@ -688,7 +702,7 @@
         log("✅ 重连 joinById 成功（等服务端下发 reconnect:ok）");
       } catch (e) {
         console.error(e);
-        log("重连失败: " + (e.message || e));
+        logError("重连失败: " + (e.message || e));
         alert("重连失败: " + (e.message || e));
       }
     }

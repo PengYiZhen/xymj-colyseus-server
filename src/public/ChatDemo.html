@@ -65,6 +65,9 @@
 
     .log-entry { padding: 8px 10px; border-bottom: 1px dashed #eaeaea; font-size: 13px; line-height: 1.5; }
     .log-entry:last-child { border-bottom: 0; }
+    .log-entry.error { color: #dc2626; font-weight: 600; border-left: 3px solid #dc2626; padding-left: 10px; }
+    .log-entry.success { color: #16a34a; }
+    .log-entry.warning { color: #d97706; }
     .log-time { color: #64748b; margin-right: 4px; }
 
     /* 聊天类型：加粗 + 各频道颜色 */
@@ -265,7 +268,7 @@
       const logContainer = document.getElementById("logContainer");
       const timestamp = new Date().toLocaleTimeString();
       const div = document.createElement("div");
-      div.className = "log-entry";
+      div.className = type && type !== "info" ? `log-entry ${type}` : "log-entry";
       div.textContent = `[${timestamp}] ${message}`;
       logContainer.appendChild(div);
       logContainer.scrollTop = logContainer.scrollHeight;

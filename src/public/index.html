@@ -267,6 +267,30 @@
             color: #218838;
             border-bottom-color: #218838;
         }
+
+        .api-result {
+            display: none;
+            margin: 16px 0;
+            padding: 14px 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', ui-monospace, monospace;
+            font-size: 0.88em;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 280px;
+            overflow: auto;
+        }
+        .api-result.ok {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .api-result.err {
+            background: #f8d7da;
+            color: #b91c1c;
+            border: 1px solid #f5c6cb;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -286,6 +310,8 @@
                 📚 查看 Swagger API 文档
             </a>
         </div>
+
+        <pre id="apiResultPanel" class="api-result" aria-live="polite"></pre>
 
         <div class="card">
             <h2>✨ 框架特性</h2>
@@ -754,6 +780,14 @@ room.onMessage("frameSync", (message) => {
         let accessToken = localStorage.getItem('accessToken') || '';
         let refreshToken = localStorage.getItem('refreshToken') || '';
 
+        function showApiResult(data, isError) {
+            const panel = document.getElementById('apiResultPanel');
+            panel.style.display = 'block';
+            panel.className = 'api-result ' + (isError ? 'err' : 'ok');
+            panel.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
         // API 调用函数
         async function tryApi(method, endpoint, data = null, needAuth = false) {
             const url = endpoint;
@@ -795,11 +829,11 @@ room.onMessage("frameSync", (message) => {
                     alert('登录成功！访问令牌和刷新令牌已保存');
                 }
 
-                // 显示响应结果
-                alert('响应结果：\n\n' + JSON.stringify(result, null, 2));
+                const isError = !response.ok || result.success === false;
+                showApiResult(result, isError);
                 console.log('API 响应:', result);
             } catch (error) {
-                alert('请求失败：' + error.message);
+                showApiResult('请求失败：' + error.message, true);
                 console.error('API 错误:', error);
             }
         }
@@ -846,15 +880,15 @@ room.onMessage("frameSync", (message) => {
                     refreshToken = result.data.refreshToken;
                     localStorage.setItem('accessToken', accessToken);
                     localStorage.setItem('refreshToken', refreshToken);
-                    alert('刷新令牌成功！\n\n新的访问令牌和刷新令牌已保存。');
+                    showApiResult(result, false);
+                    alert('刷新令牌成功！新的访问令牌和刷新令牌已保存。');
                 } else {
-                    alert('刷新令牌失败：' + (result.message || '未知错误'));
+                    showApiResult(result, true);
                 }
 
-                // 显示完整响应结果
                 console.log('刷新令牌响应:', result);
             } catch (error) {
-                alert('请求失败：' + error.message);
+                showApiResult('请求失败：' + error.message, true);
                 console.error('刷新令牌错误:', error);
             }
         }

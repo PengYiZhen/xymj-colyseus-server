@@ -18,7 +18,7 @@ import { listen } from "@colyseus/tools";
 // Import Colyseus config
 import app from "./app.config";
 
-// 统一控制台输出格式：[xymj][类别]，并用蓝色前缀显示
+// 统一控制台输出格式：[xymj][类别] 蓝色前缀；error/warn 正文红/黄
 installConsolePrefix("系统");
 
 // Create and listen on 2567 (or PORT environment variable.)

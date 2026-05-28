@@ -1,16 +1,33 @@
 type LogLevel = "log" | "info" | "warn" | "error";
 
 const BLUE = "\x1b[34m";
+const YELLOW = "\x1b[33m";
+const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
+/** 前缀固定蓝色；仅 error/warn 的正文另行着色 */
 function prefix(category: string) {
   const cat = category && String(category).trim() ? String(category).trim() : "系统";
   return `${BLUE}[xymj][${cat}]${RESET}`;
 }
 
-export function formatLogArgs(category: string, args: any[]) {
-  // 保证 prefix 独立一个参数，避免影响原本对象打印
-  return [prefix(category), ...args];
+function colorizeArgs(level: LogLevel, args: any[]): any[] {
+  if (level === "log" || level === "info") return args;
+
+  const color = level === "error" ? RED : YELLOW;
+  return args.map((arg) => {
+    if (arg instanceof Error) {
+      return `${color}${arg.stack ?? arg.message}${RESET}`;
+    }
+    if (typeof arg === "string") {
+      return `${color}${arg}${RESET}`;
+    }
+    return arg;
+  });
+}
+
+export function formatLogArgs(category: string, args: any[], level: LogLevel = "log") {
+  return [prefix(category), ...colorizeArgs(level, args)];
 }
 
 export function installConsolePrefix(defaultCategory = "系统") {
@@ -24,7 +41,6 @@ export function installConsolePrefix(defaultCategory = "系统") {
   const wrap =
     (level: LogLevel) =>
     (...args: any[]) => {
-      // 允许调用方用 console.log("[数据库]", "xxx") 这种方式指定类别
       let category = defaultCategory;
       if (typeof args[0] === "string") {
         const m = args[0].match(/^\s*\[([^\]]+)\]\s*/);
@@ -34,7 +50,7 @@ export function installConsolePrefix(defaultCategory = "系统") {
           if (args[0] === "") args = args.slice(1);
         }
       }
-      orig[level](...formatLogArgs(category, args));
+      orig[level](...formatLogArgs(category, args, level));
     };
 
   console.log = wrap("log") as any;
@@ -49,4 +65,3 @@ export function installConsolePrefix(defaultCategory = "系统") {
     console.error = orig.error as any;
   };
 }
-

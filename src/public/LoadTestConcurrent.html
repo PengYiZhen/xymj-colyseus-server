@@ -75,9 +75,12 @@
       padding: 10px;
       border-radius: 8px;
       font-family: ui-monospace, monospace;
-      white-space: pre-wrap;
       word-break: break-all;
     }
+    .log-line { padding: 2px 0; line-height: 1.45; white-space: pre-wrap; }
+    .log-line--error { color: #f87171; font-weight: 600; }
+    .log-line--warn { color: #fbbf24; }
+    .log-line--success { color: #86efac; }
     .hint { font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 8px; }
     .warn-box {
       background: #fffbeb;
@@ -222,11 +225,22 @@
     var statTimer = null;
     var stateBoundRoom = null;
 
-    function log(msg) {
+    function inferLogType(msg) {
+      var s = String(msg);
+      if (/失败|error|异常|解析失败/i.test(s)) return "error";
+      if (/成功|评分/i.test(s)) return "success";
+      return "";
+    }
+    function log(msg, type) {
       var el = document.getElementById("logBox");
       var t = new Date().toLocaleTimeString();
-      el.textContent = "[" + t + "] " + msg + "\n" + el.textContent;
+      var line = document.createElement("div");
+      var level = type || inferLogType(msg);
+      line.className = "log-line" + (level ? " log-line--" + level : "");
+      line.textContent = "[" + t + "] " + msg;
+      el.prepend(line);
     }
+    function logError(msg) { log(msg, "error"); }
 
     function isLoadtestRoom() {
       return document.getElementById("roomName").value === "loadtest_room";
@@ -284,7 +298,7 @@
           var extra = JSON.parse(raw);
           if (extra && typeof extra === "object") Object.assign(base, extra);
         } catch (e) {
-          log("join options JSON 解析失败: " + e.message);
+          logError("join options JSON 解析失败: " + e.message);
         }
       }
       var tok = document.getElementById("token").value.trim();
@@ -436,7 +450,7 @@
         } catch (e) {
           metrics.failed++;
           if (metrics.failed <= 8 || metrics.failed % 20 === 0) {
-            log("连接失败 #" + metrics.failed + ": " + (e.message || e));
+            logError("连接失败 #" + metrics.failed + ": " + (e.message || e));
           }
         } finally {
           metrics.pending--;

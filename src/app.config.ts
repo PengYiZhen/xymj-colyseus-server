@@ -46,6 +46,10 @@ import controllers from "./controllers/autoLoad/index";
 
 export default config({
 
+    options: {
+        greet: false,
+    },
+
     /**
      * WebSocket 传输层：把 .env 里的 COLYSEUS_PING_* 真正传给 ws（原先仅在 config 中定义未生效）
      */

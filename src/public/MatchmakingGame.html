@@ -99,9 +99,13 @@
       padding: 12px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
       font-size: 12px;
-      white-space: pre-wrap;
+      color: #e5e7eb;
       word-break: break-word;
     }
+    .log-line { padding: 2px 0; line-height: 1.45; white-space: pre-wrap; }
+    .log-line--error { color: #f87171; font-weight: 600; }
+    .log-line--warn { color: #fbbf24; }
+    .log-line--success { color: #86efac; }
     .players {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -173,8 +177,21 @@
 
     function $(id) { return document.getElementById(id); }
     function now() { return new Date().toLocaleTimeString(); }
-    function log(msg) { $("logBox").textContent = `[${now()}] ${msg}\n` + $("logBox").textContent; }
-    function clearLog() { $("logBox").textContent = ""; log("日志已清空"); }
+    function inferLogType(msg) {
+      const s = String(msg);
+      if (/error|失败|异常/i.test(s)) return "error";
+      if (/成功|✅|reconnect:ok/i.test(s)) return "success";
+      return "";
+    }
+    function log(msg, type) {
+      const line = document.createElement("div");
+      const level = type || inferLogType(msg);
+      line.className = "log-line" + (level ? ` log-line--${level}` : "");
+      line.textContent = `[${now()}] ${msg}`;
+      $("logBox").prepend(line);
+    }
+    function logError(msg) { log(msg, "error"); }
+    function clearLog() { $("logBox").innerHTML = ""; log("日志已清空"); }
 
     function setPill(text, kind) {
       const el = $("statusPill");
@@ -190,7 +207,7 @@
 
       if (!payload || !payload.serverUrl || !payload.token || !payload.roomId) {
         setPill("缺少匹配信息", "warn");
-        log("未找到 sessionStorage[xymj_match_found]，请从 MatchmakingDemo.html 重新进入");
+        logError("未找到 sessionStorage[xymj_match_found]，请从 MatchmakingDemo.html 重新进入");
         $("btnJoin").disabled = true;
         $("btnReconnect").disabled = true;
         return;
@@ -261,7 +278,7 @@
         $("btnReconnect").disabled = false;
 
         setPill("已进入房间，等待开始");
-        log("✅ 已加入 game_room，准备开始游戏");
+        log("✅ 已加入 game_room，准备开始游戏", "success");
 
         room.onMessage("reconnect:ok", (msg) => log("reconnect:ok " + JSON.stringify(msg)));
         room.onMessage("playerOffline", (msg) => log("playerOffline " + JSON.stringify(msg)));
@@ -274,7 +291,7 @@
           $("btnReconnect").disabled = false;
           room = null;
         });
-        room.onError((code, message) => log(`error [${code}] ${message}`));
+        room.onError((code, message) => logError(`error [${code}] ${message}`));
 
         // state
         room.onStateChange((state) => {
@@ -283,7 +300,7 @@
       } catch (e) {
         console.error(e);
         setPill("加入失败", "warn");
-        log("加入失败: " + (e.message || e));
+        logError("加入失败: " + (e.message || e));
         alert("加入失败: " + (e.message || e));
       }
     }
@@ -316,7 +333,7 @@
       } catch (e) {
         console.error(e);
         setPill("重连失败", "warn");
-        log("重连失败: " + (e.message || e));
+        logError("重连失败: " + (e.message || e));
         alert("重连失败: " + (e.message || e));
       }
     }
